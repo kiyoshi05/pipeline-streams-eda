@@ -27,7 +27,7 @@ Solo usa la biblioteca estándar de Python. Los gráficos necesitan `matplotlib`
 
 Todos los comandos se ejecutan desde la raíz del proyecto.
 
-Pruebas (46 pruebas):
+Pruebas (47 pruebas):
 
 ```bash
 python -m pytest

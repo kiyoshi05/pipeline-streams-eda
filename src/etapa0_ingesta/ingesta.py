@@ -44,7 +44,8 @@ def leer_csv(ruta, limite=None, campos=CAMPOS_EVENTO, a_evento=None, codificacio
 class Etapa0Ingesta:
     """Buffer de entrada del pipeline.
 
-    - ``capacidad``: máximo de eventos que el buffer retiene a la vez.
+    - ``capacidad``: máximo de eventos que el buffer retiene a la vez; None = sin
+      límite (solo con "lista", el buffer circular necesita un tamaño fijo).
     - ``tam_lote``: cantidad de eventos que se entregan a la etapa 1 por lote.
     - ``estructura``: "lista" (ColaFIFO, la implementación principal) o
       "circular" (BufferCircular, la alternativa).
@@ -57,7 +58,7 @@ class Etapa0Ingesta:
     def __init__(self, capacidad=10_000, tam_lote=1_000, estructura="lista"):
         if tam_lote <= 0:
             raise ValueError("tam_lote debe ser positivo")
-        if tam_lote > capacidad:
+        if capacidad is not None and tam_lote > capacidad:
             raise ValueError("tam_lote no puede ser mayor que la capacidad del buffer")
         if estructura == "lista":
             self.cola = ColaFIFO(capacidad)

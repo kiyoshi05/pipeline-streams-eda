@@ -159,6 +159,12 @@ class TestEtapa0Ingesta(unittest.TestCase):
         self.assertEqual(etapa.contrapresion, 1)
         self.assertEqual(etapa.recibidos, 7)
 
+    def test_sin_capacidad_maxima(self):
+        etapa = Etapa0Ingesta(capacidad=None, tam_lote=10)
+        self.assertEqual([len(l) for l in etapa.procesar_stream(range(25))], [10, 10, 5])
+        with self.assertRaises(ValueError):
+            Etapa0Ingesta(capacidad=None, tam_lote=10, estructura="circular")
+
     def test_configuracion_invalida(self):
         with self.assertRaises(ValueError):
             Etapa0Ingesta(capacidad=10, tam_lote=20)
