@@ -142,7 +142,8 @@ def dibujar_panel(ax, fig, series, estilo, columna, con_error, titulo_panel):
         ax.plot(ns, ys, color=color, linestyle=trazo, linewidth=grosor, marker="o", markersize=5,
                 markerfacecolor=color, markeredgecolor="white", markeredgewidth=1, label=leyenda, zorder=3)
         if con_error:
-            ax.errorbar(ns, ys, yerr=[[min(d[2], d[1] * 0.99) for d in datos], [d[2] for d in datos]],
+            # En log, una barra que baja hasta casi 0 estira el eje; se corta en la mitad del valor.
+            ax.errorbar(ns, ys, yerr=[[min(d[2], d[1] * 0.5) for d in datos], [d[2] for d in datos]],
                         fmt="none", ecolor=color, elinewidth=1, capsize=2, alpha=0.7, zorder=2)
         etiquetas.append((ns[-1], ys[-1], nombre, color))
     if not etiquetas:
