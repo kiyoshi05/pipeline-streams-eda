@@ -128,35 +128,35 @@ python -m experimentos.graficar_etapas_0_1
 | lower_bound, upper_bound, contiene | O(log n) | O(1) |
 | procesar_lote completo | O(n log n) | O(n) |
 
-## Resultados preliminares
+## Resultados
 
-Son de una corrida de comprobación en la laptop de desarrollo (Intel Core Ultra 7 165U, 16 GB, Python 3.13) con solo 5 repeticiones, de 1K a 100K. Sirven para saber qué esperar; no los uses en el informe. Corre el benchmark completo.
+Los CSV están en `experimentos/resultados/` y las figuras en `experimentos/figuras/`. Se midieron de 1K a 1M, con semilla 42, 100 repeticiones hasta 100K (10 en las variantes cuadráticas) y 10 en 1M, en una Intel Core Ultra 7 165U con Python 3.13. La laptop estaba **en batería**: los tiempos absolutos son mayores que enchufada, pero todas las variantes se midieron en las mismas condiciones. 10M queda pendiente.
 
-- **Cola.** Lista enlazada y buffer circular crecen de forma lineal (pendiente cercana a 1,1). `list.pop(0)` es cuadrática (pendiente 2,2): a 100K tardó 2,2 s contra 0,04 s de la lista enlazada. `deque` es unas 5 veces más rápida porque está escrita en C.
-- **Memoria de la cola a 100K.** Lista enlazada 4,8 MB, buffer circular 0,8 MB.
-- **Ordenación.**
-  - En orden aleatorio, la inserción es cuadrática (pendiente 2,5) y tardó 6,4 s con solo 10K.
-  - El stream llega casi ordenado por tiempo, y ahí la inserción casi no necesita mover elementos: fue unas 2 veces más rápida que merge sort.
-  - Timsort (`sorted`) fue unas 12 veces más rápido que el merge sort propio. Es esperable: está en C y aprovecha los tramos ya ordenados.
-  - Esto vale para defender en el informe: merge sort garantiza O(n log n) aunque el stream llegue desordenado.
-- **Deduplicación a 100K.** `set` y "sorted + vecinos" tardan casi lo mismo (0,04 s), pero el `set` usa 7,0 MB frente a 1,6 MB y no deja el lote ordenado.
-- **Búsqueda a 100K.** 100 consultas binarias tardaron 0,2 ms y la búsqueda lineal 1,1 s.
-- **Etapa 1 completa.** Entre 70.000 y 220.000 eventos por segundo según la corrida. Precisión de la deduplicación 100%, recall 99,7%.
+| Estructura o algoritmo | Pendiente esperada | Pendiente medida |
+|---|---|---|
+| Cola con lista enlazada | 1 | 1,01 |
+| `list.pop(0)` | 2 | 2,48 |
+| Merge sort, entrada aleatoria | ≈ 1,1 | 1,21 |
+| Inserción, entrada aleatoria | 2 | 2,03 |
+| Búsqueda binaria, 100 consultas | ≈ 0,1 | 0,07 |
+| Búsqueda lineal, 100 consultas | 1 | 1,02 |
 
-Las pendientes salieron algo por encima de la teoría: alrededor de 1,2–1,3 en operaciones lineales. Hay dos causas probables. Con más datos, los objetos ya no caben en la caché del procesador. Además, este procesador tiene núcleos de rendimiento y de eficiencia, y Windows mueve el proceso entre ellos, lo que da mucha variación entre corridas.
+- **Cola.** Con 100K, `list.pop(0)` tarda 16,8 s y la lista enlazada 0,057 s (unas 300 veces menos). Con 1M, `deque` es unas 5 veces más rápida que la lista enlazada (0,11 s frente a 0,57 s) porque está escrita en C. La memoria pico con 1M es 48,0 MB para la lista enlazada y 8,0 MB para el buffer circular.
+- **Ordenación.** El stream llega casi ordenado por tiempo; con esa entrada, la inserción tarda 1,60 s con 1M y merge sort 4,42 s. Con entrada aleatoria, la inserción ya tarda 5,7 s con 10K: merge sort se mantiene porque garantiza O(n log n). `sorted()` es unas 10 veces más rápido que merge sort con la entrada casi ordenada.
+- **Deduplicación con 1M.** `sorted()` + vecinos tarda 0,77 s y usa 16,9 MB; el conjunto hash tarda 0,87 s y usa 55,9 MB, y además no deja el lote ordenado.
+- **Búsqueda.** 100 consultas binarias tardan 0,41 ms con 1M; 100 lineales tardan 0,86 s con solo 100K.
+- **De punta a punta, 1M de eventos en lotes de 1.000.** Precisión de la deduplicación 100 %, recall 99,7 % (se escapan las copias que caen en otro lote) y unos 59.000 eventos/s en la etapa 1, en batería.
 
-Para las mediciones oficiales:
+Para repetir la medición enchufada:
 - laptop enchufada y en modo de energía "Mejor rendimiento";
 - terminal en primer plano y otros programas cerrados;
 - reportar el promedio y también el mínimo (`min_s`).
 
-El benchmark avisa si la laptop está en batería y lo registra en la columna `plataforma` de cada CSV (`energia: bateria` o `energia: corriente`). También pide a Windows que no lo ponga en modo de eficiencia aunque la terminal quede en segundo plano.
-
-Una corrida de prueba (en batería o con pocas repeticiones) va a otra carpeta con `--salida`, para no mezclarla con los resultados oficiales de `experimentos/resultados/`, y no se sube al repo.
+El benchmark avisa si la laptop está en batería y lo registra en la columna `plataforma` de cada CSV (`energia: bateria` o `energia: corriente`). También pide a Windows que no lo ponga en modo de eficiencia aunque la terminal quede en segundo plano. Una corrida de prueba va a otra carpeta con `--salida`, para no mezclarla con los resultados de `experimentos/resultados/`, y no se sube al repo.
 
 ## Pendientes
 
 - Probar con la clase real de `src/comun/evento.py`.
 - Definir con quien haga el generador si los duplicados son copias exactas o con el tiempo desplazado (`ventana_seg`), y si cada copia lleva el id del evento original.
 - Confirmar con el profesor que se aceptan menos repeticiones en 1M y 10M.
-- Correr los benchmarks oficiales y generar las figuras para el informe.
+- Repetir la medición con la laptop enchufada y agregar 10M (alrededor de una hora y 2–3 GB de RAM libres).
