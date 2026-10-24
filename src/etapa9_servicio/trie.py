@@ -37,10 +37,15 @@ class Trie:
         encontrados = []
 
         def recorrer(actual):
+            if len(encontrados) >= k:
+                return
             if actual.palabra is not None:
                 encontrados.append(actual.palabra)
-            for siguiente in actual.hijos.values():
-                recorrer(siguiente)
+
+            for caracter in sorted(actual.hijos):
+                if len(encontrados) >= k:
+                    break
+                recorrer(actual.hijos[caracter])
 
         recorrer(nodo)
-        return sorted(encontrados, key=str.casefold)[:k]
+        return encontrados

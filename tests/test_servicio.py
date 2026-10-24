@@ -29,6 +29,26 @@ class TestServicioRecomendaciones(unittest.TestCase):
         metricas = self.servicio.metricas()
         self.assertEqual(3, metricas["total_eventos"])
         self.assertEqual(3, metricas["productos"])
+    
+    def test_similares_por_compra(self):
+        eventos = [
+            {"product_id": 1, "user_id": 10, "price": 20, "brand": "A",
+            "category_code": "ropa", "event_type": "purchase"},
+            {"product_id": 1, "user_id": 11, "price": 20, "brand": "A",
+            "category_code": "ropa", "event_type": "purchase"},
+            {"product_id": 2, "user_id": 10, "price": 22, "brand": "A",
+            "category_code": "ropa", "event_type": "purchase"},
+            {"product_id": 2, "user_id": 11, "price": 22, "brand": "A",
+            "category_code": "ropa", "event_type": "purchase"},
+            {"product_id": 3, "user_id": 30, "price": 90, "brand": "B",
+            "category_code": "electronica", "event_type": "purchase"},
+        ]
+
+        servicio = ServicioRecomendaciones(eventos)
+        resultado = servicio.similares_por_compra(1, k=2)
+
+        self.assertEqual(2, resultado[0][0])
+        self.assertAlmostEqual(1.0, resultado[0][1])
 
 
 if __name__ == "__main__":
