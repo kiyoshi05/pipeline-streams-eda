@@ -1,0 +1,2 @@
+n,k,consultas,repeticiones_construccion,construccion_media_s,construccion_desv_s,consulta_media_s,consulta_desv_s,recall_at_k,memoria_pico_mb,semilla
+1000,10,100,100,1.4071133220000775,0.9293702652856601,0.00016708200002540252,3.47283407627323e-05,0.784,12.322246551513672,42

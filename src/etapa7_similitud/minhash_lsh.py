@@ -3,6 +3,8 @@ from functools import lru_cache
 from hashlib import blake2b
 import random
 
+from src.etapa1_preprocesamiento.preprocesamiento import campo
+
 
 _PRIMO = 2**61 - 1
 
@@ -12,11 +14,12 @@ def conjuntos_usuarios_por_producto(eventos):
     conjuntos = defaultdict(set)
 
     for evento in eventos:
-        if str(evento.get("event_type", "")).lower() != "purchase":
+        tipo = str(campo(evento, "event_type", "")).lower()
+        if tipo != "purchase":
             continue
 
-        product_id = evento.get("product_id")
-        user_id = evento.get("user_id")
+        product_id = campo(evento, "product_id")
+        user_id = campo(evento, "user_id")
 
         if product_id is not None and user_id is not None:
             conjuntos[product_id].add(user_id)
@@ -27,7 +30,10 @@ def conjuntos_usuarios_por_producto(eventos):
 @lru_cache(maxsize=None)
 def _token_a_entero(token):
     texto = str(token).encode("utf-8")
-    return int.from_bytes(blake2b(texto, digest_size=8).digest(), "big")
+    return int.from_bytes(
+        blake2b(texto, digest_size=8).digest(),
+        "big",
+    )
 
 
 class MinHashLSH:
@@ -101,4 +107,7 @@ class MinHashLSH:
             jaccard = len(usuarios_objetivo & usuarios_otro) / len(union)
             resultados.append((otro, jaccard))
 
-        return sorted(resultados, key=lambda x: (-x[1], str(x[0])))[:k]
+        return sorted(
+            resultados,
+            key=lambda x: (-x[1], str(x[0])),
+        )[:k]

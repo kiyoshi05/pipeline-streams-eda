@@ -1,4 +1,4 @@
-from heapq import heappush, heapreplace
+from src.etapa2_prioridad.heap import MinHeap
 
 
 def top_k(elementos, k):
@@ -6,15 +6,23 @@ def top_k(elementos, k):
     if k < 1:
         raise ValueError("k debe ser mayor que cero")
 
-    heap = []
+    heap = MinHeap()
 
     for orden, (identificador, puntuacion) in enumerate(elementos):
         entrada = (float(puntuacion), -orden, identificador)
 
         if len(heap) < k:
-            heappush(heap, entrada)
-        elif entrada[:2] > heap[0][:2]:
-            heapreplace(heap, entrada)
+            heap.push(entrada)
+        elif entrada[:2] > heap.peek()[:2]:
+            heap.pop()
+            heap.push(entrada)
 
-    mejores = sorted(heap, key=lambda x: (-x[0], -x[1]))
-    return [(identificador, puntuacion) for puntuacion, _, identificador in mejores]
+    mejores = []
+    while heap:
+        mejores.append(heap.pop())
+
+    mejores.sort(key=lambda elemento: (-elemento[0], -elemento[1]))
+    return [
+        (identificador, puntuacion)
+        for puntuacion, _, identificador in mejores
+    ]

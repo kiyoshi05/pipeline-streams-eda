@@ -2,6 +2,8 @@ from collections import Counter
 from math import log1p
 from statistics import median
 
+from src.etapa1_preprocesamiento.preprocesamiento import campo
+
 
 PESO_EVENTO = {
     "view": 1.0,
@@ -31,7 +33,7 @@ def construir_vectores_productos(eventos):
     productos = {}
 
     for evento in eventos:
-        product_id = evento.get("product_id")
+        product_id = campo(evento, "product_id")
         if product_id is None:
             continue
 
@@ -40,15 +42,19 @@ def construir_vectores_productos(eventos):
             {"precios": [], "categorias": Counter(), "popularidad": 0.0},
         )
 
-        try:
-            producto["precios"].append(float(evento["price"]))
-        except (KeyError, TypeError, ValueError):
-            pass
+        precio = campo(evento, "price")
+        if precio is not None:
+            try:
+                producto["precios"].append(float(precio))
+            except (TypeError, ValueError):
+                pass
 
-        categoria = str(evento.get("category_code") or "desconocido").strip().lower()
+        categoria = str(
+            campo(evento, "category_code") or "desconocido"
+        ).strip().lower()
         producto["categorias"][categoria] += 1
 
-        tipo = str(evento.get("event_type") or "view").lower()
+        tipo = str(campo(evento, "event_type") or "view").lower()
         producto["popularidad"] += PESO_EVENTO.get(tipo, 1.0)
 
     if not productos:
@@ -56,7 +62,9 @@ def construir_vectores_productos(eventos):
 
     ids = list(productos)
     precios = [
-        median(productos[id_]["precios"]) if productos[id_]["precios"] else 0.0
+        median(productos[id_]["precios"])
+        if productos[id_]["precios"]
+        else 0.0
         for id_ in ids
     ]
     popularidades = [
@@ -74,7 +82,10 @@ def construir_vectores_productos(eventos):
         )[0]
         for id_ in ids
     })
-    categoria_a_posicion = {categoria: i for i, categoria in enumerate(categorias)}
+    categoria_a_posicion = {
+        categoria: i
+        for i, categoria in enumerate(categorias)
+    }
 
     vectores = []
     for i, id_ in enumerate(ids):

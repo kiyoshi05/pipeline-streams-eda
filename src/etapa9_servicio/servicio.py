@@ -1,5 +1,6 @@
 from collections import Counter
 
+from src.etapa1_preprocesamiento.preprocesamiento import campo
 from src.etapa5_multidimensional.features import construir_vectores_productos
 from src.etapa7_similitud.ivf import IVFFlat
 from src.etapa7_similitud.minhash_lsh import (
@@ -16,7 +17,6 @@ class ServicioRecomendaciones:
     def __init__(self, eventos, n_clusters=16, nprobe=4):
         self.eventos = list(eventos)
 
-        # Prepara los vectores de atributos y el índice IVF.
         self.vectores, _ = construir_vectores_productos(self.eventos)
         self.vector_por_id = dict(self.vectores)
 
@@ -28,18 +28,16 @@ class ServicioRecomendaciones:
                 nprobe=nprobe,
             )
 
-        # Prepara los conjuntos de compradores y el índice MinHash-LSH.
         self.conjuntos_compra = conjuntos_usuarios_por_producto(self.eventos)
         self.indice_lsh = MinHashLSH(
             num_hashes=100,
             bandas=20,
         ).ajustar(self.conjuntos_compra)
 
-        # Carga marcas y categorías para autocompletar.
         self.trie = Trie()
         for evento in self.eventos:
-            for campo in ("brand", "category_code"):
-                valor = evento.get(campo)
+            for nombre_campo in ("brand", "category_code"):
+                valor = campo(evento, nombre_campo)
                 if valor:
                     self.trie.insertar(str(valor))
 
@@ -57,7 +55,6 @@ class ServicioRecomendaciones:
             excluir_id=product_id,
         )
 
-        # Una distancia menor equivale a una puntuación de similitud mayor.
         puntuaciones = [
             (id_, 1.0 / (1.0 + distancia))
             for id_, distancia in similares
@@ -78,17 +75,17 @@ class ServicioRecomendaciones:
     def metricas(self):
         """Resume los eventos recibidos por el servicio."""
         productos = {
-            evento.get("product_id")
+            campo(evento, "product_id")
             for evento in self.eventos
-            if evento.get("product_id") is not None
+            if campo(evento, "product_id") is not None
         }
         usuarios = {
-            evento.get("user_id")
+            campo(evento, "user_id")
             for evento in self.eventos
-            if evento.get("user_id") is not None
+            if campo(evento, "user_id") is not None
         }
         tipos_evento = Counter(
-            str(evento.get("event_type") or "desconocido").lower()
+            str(campo(evento, "event_type") or "desconocido").lower()
             for evento in self.eventos
         )
 
