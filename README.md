@@ -79,6 +79,9 @@ streamlit run app.py
 python -m experimentos.bench_etapas_0_1          # etapas 0 y 1
 python -m experimentos.bench_etapa6 --n 100000   # etapa 6
 python -m experimentos.graficar_etapa6
+python -m experimentos.bench_estructuras_base    # etapas 2, 3 y 4
+python -m experimentos.bench_comunidades         # etapa 8
+python -m experimentos.graficar_etapas_2_3_4_8
 ```
 
 ## Datos
