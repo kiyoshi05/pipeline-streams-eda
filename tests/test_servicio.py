@@ -161,6 +161,67 @@ class TestServicioRecomendaciones(unittest.TestCase):
         self.assertEqual(2, similares[0][0])
         self.assertEqual(["Acme"], servicio.autocompletar("ac"))
 
+    def test_calcula_pagerank_y_comunidades_desde_etapa8(self):
+        eventos = [
+            {
+                "product_id": 1,
+                "user_id": 10,
+                "event_type": "purchase",
+                "user_session": "sesion-a",
+                "price": 10,
+                "category_code": "ropa",
+            },
+            {
+                "product_id": 2,
+                "user_id": 10,
+                "event_type": "purchase",
+                "user_session": "sesion-a",
+                "price": 12,
+                "category_code": "ropa",
+            },
+            {
+                "product_id": 3,
+                "user_id": 20,
+                "event_type": "purchase",
+                "user_session": "sesion-b",
+                "price": 80,
+                "category_code": "electronica",
+            },
+            {
+                "product_id": 4,
+                "user_id": 20,
+                "event_type": "purchase",
+                "user_session": "sesion-b",
+                "price": 85,
+                "category_code": "electronica",
+            },
+        ]
+
+        servicio = ServicioRecomendaciones(eventos)
+
+        self.assertEqual({1, 2, 3, 4}, set(servicio.pagerank))
+        self.assertAlmostEqual(1.0, sum(servicio.pagerank.values()))
+        self.assertIsNotNone(servicio.comunidad_de(1))
+        self.assertEqual(1, len(servicio.productos_influyentes(k=1)))
+
+    def test_acepta_resultados_externos_y_alertas(self):
+        pagerank = {1: 0.75, 2: 0.25}
+        comunidades = {1: 0, 2: 0}
+        alertas = [{"product_id": 1, "motivo": "prueba"}]
+
+        servicio = ServicioRecomendaciones(
+            self.eventos,
+            pagerank=pagerank,
+            comunidades=comunidades,
+            alertas=alertas,
+        )
+
+        self.assertEqual(pagerank, servicio.pagerank)
+        self.assertEqual(comunidades, servicio.comunidades)
+        self.assertEqual(alertas, servicio.alertas)
+        self.assertEqual([(1, 0.75)], servicio.productos_influyentes(k=1))
+        self.assertEqual(0, servicio.comunidad_de(1))
+
 
 if __name__ == "__main__":
     unittest.main()
