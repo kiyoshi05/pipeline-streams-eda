@@ -1,0 +1,7 @@
+experimento,capacidad_pct,capacidad,productos,accesos,tasa_aciertos,expulsiones,semilla,plataforma
+lru_aciertos,1,1000,100000,1000000,0.50556,493440,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+lru_aciertos,2,2000,100000,1000000,0.572944,425056,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+lru_aciertos,5,5000,100000,1000000,0.664568,330432,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+lru_aciertos,10,10000,100000,1000000,0.735442,254558,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+lru_aciertos,20,20000,100000,1000000,0.806961,173039,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+lru_aciertos,50,50000,100000,1000000,0.894859,55141,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"

@@ -1,0 +1,9 @@
+experimento,variante,n,repeticiones,prom_s,desv_s,min_s,mem_pico_bytes,mem_final_bytes,extra,semilla,plataforma
+heap_construccion,heapify,1000,100,0.0002172119962051511,2.3912917291958903e-05,0.00019999966025352478,8444,8192,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap_construccion,n_push,1000,100,0.000287722023203969,6.46517927830056e-05,0.00026430003345012665,9080,8936,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap_construccion,heapify,10000,100,0.002381295985542238,0.00025493299880061294,0.002103900071233511,80444,80192,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap_construccion,n_push,10000,100,0.0032962839864194393,0.00033740498004981417,0.002993199974298477,85400,85256,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap_construccion,heapify,100000,100,0.02910173999145627,0.002487104982458307,0.0230381996370852,800444,800192,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap_construccion,n_push,100000,100,0.040017653973773125,0.0013061921906331797,0.03763739997521043,801208,801064,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap_construccion,heapify,1000000,10,0.30378096997737886,0.043241823724353506,0.27132639987394214,8000548,8000296,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap_construccion,n_push,1000000,10,0.42132537993602454,0.007652733799945728,0.4123633997514844,8448952,8448808,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
