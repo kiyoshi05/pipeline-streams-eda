@@ -7,7 +7,7 @@ from experimentos.datos_sinteticos import iterar_eventos
 from src.etapa0_ingesta import Etapa0Ingesta
 from src.etapa1_preprocesamiento import Etapa1Preprocesamiento
 from src.etapa2_prioridad.prioridad import (
-    BAJA, ESTANDAR, EXPRESS, FRAUDE_O_PAGO, Etapa2Prioridad, asignar_prioridad,
+    BAJA, ESTANDAR, EXPRESS, FRAUDE_O_PAGO, PROGRAMADA, Etapa2Prioridad, asignar_prioridad,
 )
 
 
@@ -179,6 +179,15 @@ class PruebasAsignarPrioridad(unittest.TestCase):
                 self.assertEqual(asignar_prioridad(ev(1, "purchase", prioridad=valor)), ESTANDAR)
 
 
+    def test_programada_entre_estandar_y_navegacion(self):
+        self.assertEqual(asignar_prioridad(ev(1, "purchase", prioridad=PROGRAMADA)), PROGRAMADA)
+        self.assertLess(ESTANDAR, PROGRAMADA)
+        self.assertLess(PROGRAMADA, BAJA)
+
+    def test_el_fraude_gana_a_la_orden_express(self):
+        self.assertEqual(asignar_prioridad(ev(1, "purchase", prioridad=EXPRESS, fraude_predicho=True)), FRAUDE_O_PAGO)
+
+
 class PruebasEtapa2(unittest.TestCase):
 
     def test_vacia(self):
@@ -198,7 +207,7 @@ class PruebasEtapa2(unittest.TestCase):
         ])
         salida = e2.extraer()
         self.assertEqual([e["event_time"] for e in salida], [3, 4, 2, 1])
-        self.assertEqual([e["prioridad"] for e in salida], [0, 1, 2, 3])
+        self.assertEqual([e["prioridad"] for e in salida], [FRAUDE_O_PAGO, EXPRESS, ESTANDAR, BAJA])
 
     def test_misma_prioridad_sale_el_mas_antiguo(self):
         e2 = Etapa2Prioridad()
@@ -238,7 +247,8 @@ class PruebasEtapa2(unittest.TestCase):
         self.assertEqual(m["recibidos"], 3)
         self.assertEqual(m["entregados"], 1)
         self.assertEqual(m["en_cola"], 2)
-        self.assertEqual(m["por_prioridad"], {"fraude_o_pago": 1, "express": 0, "estandar": 1, "baja": 1})
+        self.assertEqual(m["por_prioridad"],
+                         {"fraude_o_pago": 1, "express": 0, "estandar": 1, "programada": 0, "baja": 1})
 
     def test_integracion_etapas_0_1_2(self):
         # Stream sintético -> etapa 0 -> etapa 1 -> etapa 2
