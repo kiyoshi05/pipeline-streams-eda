@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Pipeline de streams · 10 etapas",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1068,
+      460
+    ]
+  },
+  "stages": [
+    {
+      "label": "Ingesta y limpieza"
+    },
+    {
+      "label": "Fraude y prioridad"
+    },
+    {
+      "label": "Almacenamiento"
+    },
+    {
+      "label": "Catálogo (al cerrar)"
+    },
+    {
+      "label": "Similitud y servicio"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "e0",
+      "type": "messagebus",
+      "label": "0 · Ingesta",
+      "sublabel": "cola FIFO",
+      "stage": 0,
+      "row": 0,
+      "width": 124,
+      "height": 56,
+      "tag": "flujo por lote"
+    },
+    {
+      "id": "e1",
+      "type": "backend",
+      "label": "1 · Limpieza",
+      "sublabel": "merge sort",
+      "stage": 0,
+      "row": 1,
+      "width": 124,
+      "height": 56
+    },
+    {
+      "id": "e2",
+      "type": "backend",
+      "label": "2 · Prioridad",
+      "sublabel": "min-heap",
+      "stage": 1,
+      "row": 0,
+      "width": 124,
+      "height": 56
+    },
+    {
+      "id": "e6",
+      "type": "security",
+      "label": "6 · Fraude",
+      "sublabel": "Bloom + Count-Min",
+      "stage": 1,
+      "row": 1,
+      "width": 124,
+      "height": 56
+    },
+    {
+      "id": "e3",
+      "type": "database",
+      "label": "3 · Lookup",
+      "sublabel": "hash + LRU",
+      "stage": 2,
+      "row": 0,
+      "width": 124,
+      "height": 56
+    },
+    {
+      "id": "e4",
+      "type": "database",
+      "label": "4 · Índice",
+      "sublabel": "B+Tree",
+      "stage": 2,
+      "row": 1,
+      "width": 124,
+      "height": 56
+    },
+    {
+      "id": "e5",
+      "type": "backend",
+      "label": "5 · Multidim.",
+      "sublabel": "k-d tree + k-NN",
+      "stage": 3,
+      "row": 0,
+      "width": 124,
+      "height": 56
+    },
+    {
+      "id": "e8",
+      "type": "backend",
+      "label": "8 · Grafo",
+      "sublabel": "PageRank",
+      "stage": 3,
+      "row": 1,
+      "width": 124,
+      "height": 56,
+      "tag": "catálogo acumulado"
+    },
+    {
+      "id": "e7",
+      "type": "backend",
+      "label": "7 · Similitud",
+      "sublabel": "IVF + LSH",
+      "stage": 4,
+      "row": 0,
+      "width": 124,
+      "height": 56
+    },
+    {
+      "id": "e9",
+      "type": "frontend",
+      "label": "9 · Servicio",
+      "sublabel": "trie + top-k",
+      "stage": 4,
+      "row": 1,
+      "width": 124,
+      "height": 56
+    }
+  ],
+  "flows": [
+    {
+      "from": "e0",
+      "to": "e1",
+      "label": "lotes",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": 26
+    },
+    {
+      "from": "e1",
+      "to": "e6",
+      "label": "lote limpio",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "e6",
+      "to": "e2",
+      "label": "anotado",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "e2",
+      "to": "e3",
+      "label": "urgencia",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "e3",
+      "to": "e4",
+      "label": "con ficha",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": 26
+    },
+    {
+      "from": "e4",
+      "to": "e8",
+      "label": "indexado",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "e8",
+      "to": "e5",
+      "label": "catálogo",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "e5",
+      "to": "e7",
+      "label": "vectores",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "e7",
+      "to": "e9",
+      "label": "similares",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": 26
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Flujo por lote",
+      "items": [
+        "Orden real: 0 → 1 → 6 → 2 → 3 → 4 → 8",
+        "La etapa 6 va antes de la prioridad: el fraude sale primero",
+        "Cada etapa deja pasar los eventos (no los pierde)"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Al cerrar el stream",
+      "items": [
+        "Las etapas 5, 7 y 9 leen el catálogo acumulado",
+        "k-d tree (exacto) e IVF + MinHash LSH (aproximado)",
+        "Se reconstruyen si llegan más lotes"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Salidas del servicio (9)",
+      "items": [
+        "Recomendaciones y autocompletado",
+        "Influencia (PageRank) y comunidades",
+        "Alertas de fraude por urgencia"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Estructura por etapa",
+      "items": [
+        "3 Lookup: tabla hash + LRU + matriz dispersa",
+        "6 Fraude: filtro de Bloom + Count-Min Sketch",
+        "7 Similitud: IVF + MinHash LSH",
+        "8 Grafo: PageRank + Louvain"
+      ]
+    }
+  ]
+}
