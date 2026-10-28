@@ -1,13 +1,23 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
 
 from src.etapa0_ingesta.ingesta import leer_csv
+from src.etapa2_prioridad.prioridad import NOMBRES as NOMBRES_PRIORIDAD
 from src.etapa6_probabilistico import Etapa6Fraude
 from src.pipeline import Pipeline
 from experimentos.datos_sinteticos import generar_eventos_fraude
 from experimentos.stream_completo import aumentar_filas, generar_stream
 
+
+ETIQUETAS_PRIORIDAD = {
+    "fraude_o_pago": "Fraude o pago",
+    "express": "Express",
+    "estandar": "Estándar",
+    "programada": "Programada",
+    "baja": "Navegación",
+}
 
 st.set_page_config(
     page_title="Recomendaciones",
@@ -66,11 +76,48 @@ col1.metric("Eventos procesados", metricas["total_eventos"])
 col2.metric("Productos", metricas["productos"])
 col3.metric("Usuarios", metricas["usuarios"])
 
+st.subheader("Panel de ventas")
+st.caption(
+    "Compras confirmadas. Las que la etapa 6 marcó como fraude quedan retenidas hasta "
+    "verificarlas y no cuentan como venta. Lo más vendido sale de un Top-K con el heap."
+)
+ventas = pipeline.ventas(k=5)
+v1, v2, v3, v4, v5 = st.columns(5)
+v1.metric("Ventas", ventas["ventas"])
+v2.metric("Ingresos", f"{ventas['ingresos']:,.2f}")
+v3.metric("Ticket promedio", f"{ventas['ticket_promedio']:,.2f}")
+v4.metric("Conversión", f"{ventas['conversion']:.1%}", help="Sesiones con al menos una compra confirmada")
+v5.metric("Retenidas por fraude", ventas["retenidas_por_fraude"])
+c_top, c_cat, c_tipo = st.columns([3, 3, 2])
+with c_top:
+    st.markdown("**Más vendidos (por ingresos)**")
+    st.dataframe(
+        [{"Producto": pid, "Marca": marca, "Unidades": unidades, "Ingresos": total}
+         for pid, marca, unidades, total in ventas["mas_vendidos"]],
+        hide_index=True,
+    )
+with c_cat:
+    st.markdown("**Ingresos por categoría**")
+    st.bar_chart(
+        [{"Categoría": c, "Ingresos": v} for c, v in ventas["por_categoria"].items()],
+        x="Categoría", y="Ingresos", horizontal=True, height=220,
+    )
+with c_tipo:
+    st.markdown("**Ventas por tipo de orden**")
+    st.dataframe(
+        [{"Tipo": ETIQUETAS_PRIORIDAD.get(t, t), "Ventas": n}
+         for t, n in sorted(ventas["por_tipo_orden"].items(), key=lambda x: -x[1])],
+        hide_index=True,
+    )
+
 st.subheader("Productos similares")
 productos = sorted(servicio.vector_por_id)
 
 if productos:
-    producto = st.selectbox("Elige un producto", productos)
+    # Empieza en el producto más influyente: tiene compras, así se ven las dos recomendaciones.
+    top = servicio.productos_influyentes(k=1)
+    inicial = productos.index(top[0][0]) if top and top[0][0] in productos else 0
+    producto = st.selectbox("Elige un producto", productos, index=inicial)
     k = st.slider("Cantidad de recomendaciones", min_value=1, max_value=3, value=2)
 
     recomendaciones = servicio.recomendar(producto, k=k)
@@ -131,6 +178,41 @@ if servicio.alertas:
     st.dataframe(servicio.alertas[:50], hide_index=True)
 else:
     st.info("La etapa 6 no marcó ningún evento: este stream no trae IP ni dispositivo.")
+
+st.subheader("Cola con prioridades (etapa 2)")
+st.caption(
+    "El MinHeap atiende primero lo más urgente: 0 fraude o pago, 1 express, 2 estándar, "
+    "3 programada y 4 navegación. A igual prioridad sale primero el más antiguo. "
+    "Lo que la etapa 6 marcó como fraude pasa a 0, aunque fuera una orden express."
+)
+conteo = pipeline.e2.metricas()["por_prioridad"]
+for col, (nivel, cantidad) in zip(st.columns(len(conteo)), conteo.items()):
+    col.metric(ETIQUETAS_PRIORIDAD[nivel], cantidad)
+
+semilla_lote = st.number_input("Lote de ejemplo (cambia el número para ver otro)", 1, 999, 42)
+llegada, salida = pipeline.lote_de_prioridades(por_nivel=2, semilla=int(semilla_lote))
+
+
+def filas_cola(eventos):
+    return [
+        {
+            "#": i,
+            "Hora": datetime.fromtimestamp(e["event_time"], tz=timezone.utc).strftime("%H:%M:%S"),
+            "Tipo": e["event_type"],
+            "Producto": e["product_id"],
+            "Prioridad": f"{int(e['prioridad'])} · {ETIQUETAS_PRIORIDAD[NOMBRES_PRIORIDAD[int(e['prioridad'])]]}",
+        }
+        for i, e in enumerate(eventos, 1)
+    ]
+
+
+q1, q2 = st.columns(2)
+with q1:
+    st.markdown("**Orden de llegada** (por hora)")
+    st.dataframe(filas_cola(llegada), hide_index=True)
+with q2:
+    st.markdown("**Orden de atención** (como sale del heap)")
+    st.dataframe(filas_cola(salida), hide_index=True)
 
 st.subheader("Recorrido de un evento por las 10 etapas")
 evento = pipeline.evento_para_demo()

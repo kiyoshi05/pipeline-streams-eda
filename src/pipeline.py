@@ -298,6 +298,63 @@ class Pipeline:
         fallos = self.e3.cache.fallos - antes[1]
         return aciertos / (aciertos + fallos) if aciertos + fallos else 0.0
 
+    # --- Prioridades y ventas (etapa 2 y panel del servicio) -------------------------------
+
+    def lote_de_prioridades(self, por_nivel=2, semilla=42):
+        """Un lote chico con eventos de cada nivel de urgencia, para ver el heap en acción.
+
+        Toma hasta ``por_nivel`` eventos procesados de cada prioridad, los ordena
+        por llegada (event_time) y los pasa por una cola nueva de la etapa 2.
+        Devuelve (llegada, salida): el orden en que llegaron y el orden en que
+        los saca el heap.
+        """
+        azar = random.Random(semilla)
+        por_prioridad = {}
+        for e in self.eventos:
+            por_prioridad.setdefault(campo(e, "prioridad"), []).append(e)
+        lote = []
+        for p in sorted(por_prioridad, key=lambda x: (x is None, x)):
+            grupo = por_prioridad[p]
+            lote.extend(azar.sample(grupo, min(por_nivel, len(grupo))))
+        llegada = sorted(lote, key=lambda e: campo(e, "event_time", 0))
+        cola = Etapa2Prioridad()
+        cola.recibir(llegada)
+        return llegada, cola.extraer()
+
+    def ventas(self, k=5):
+        """Panel de ventas: compras confirmadas, ingresos, conversión y lo más vendido.
+
+        Una compra que la etapa 6 marcó como fraude no cuenta como venta: queda
+        retenida hasta verificarla. Lo más vendido sale de un Top-K con el heap
+        (mayores_k), no de ordenar todo el catálogo.
+        """
+        compras = [e for e in self.eventos if campo(e, "event_type") == "purchase"]
+        confirmadas = [e for e in compras if not campo(e, "fraude_predicho")]
+        unidades, ingreso_producto, marca = Counter(), Counter(), {}
+        por_categoria, por_tipo_orden = Counter(), Counter()
+        for e in confirmadas:
+            pid, precio = campo(e, "product_id"), float(campo(e, "price") or 0)
+            unidades[pid] += 1
+            ingreso_producto[pid] += precio
+            marca[pid] = campo(e, "brand") or "-"
+            categoria = str(campo(e, "category_code") or "sin categoría").split(".")[0]
+            por_categoria[categoria] += precio
+            por_tipo_orden[NOMBRES_PRIORIDAD.get(campo(e, "prioridad"), "?")] += 1
+        ingresos = sum(ingreso_producto.values())
+        sesiones = {campo(e, "user_session") for e in self.eventos if campo(e, "user_session")}
+        con_compra = {campo(e, "user_session") for e in confirmadas if campo(e, "user_session")}
+        return {
+            "ventas": len(confirmadas),
+            "retenidas_por_fraude": len(compras) - len(confirmadas),
+            "ingresos": round(ingresos, 2),
+            "ticket_promedio": round(ingresos / len(confirmadas), 2) if confirmadas else 0.0,
+            "conversion": len(con_compra) / len(sesiones) if sesiones else 0.0,
+            "mas_vendidos": [(pid, marca[pid], unidades[pid], round(total, 2))
+                             for pid, total in mayores_k(ingreso_producto, k)],
+            "por_categoria": {c: round(v, 2) for c, v in por_categoria.most_common()},
+            "por_tipo_orden": dict(por_tipo_orden),
+        }
+
     # --- Similitud frente al método exacto (etapas 5 y 7) ----------------------------------
 
     def comparar_similitud(self, k=5, muestras=30, semilla=42):

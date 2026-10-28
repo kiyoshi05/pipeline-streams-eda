@@ -107,6 +107,27 @@ class PruebasPipeline1K(unittest.TestCase):
         tiempos = sorted(e["event_time"] for e in self.p.eventos)
         self.assertEqual(len(self.p.eventos_entre(tiempos[0], tiempos[-1])), len(self.p.eventos))
 
+    def test_lote_de_prioridades_sale_por_urgencia(self):
+        llegada, salida = self.p.lote_de_prioridades(por_nivel=2, semilla=42)
+        self.assertEqual(len(llegada), 10)                      # 2 de cada uno de los 5 niveles
+        self.assertEqual(sorted(map(id, llegada)), sorted(map(id, salida)))
+        self.assertEqual([e["event_time"] for e in llegada], sorted(e["event_time"] for e in llegada))
+        claves = [(e["prioridad"], e["event_time"]) for e in salida]
+        self.assertEqual(claves, sorted(claves))                # urgencia y, a igual urgencia, el más antiguo
+        self.assertNotEqual([id(e) for e in llegada], [id(e) for e in salida])
+
+    def test_panel_de_ventas(self):
+        v = self.p.ventas(k=5)
+        compras = [e for e in self.p.eventos if e["event_type"] == "purchase"]
+        self.assertEqual(v["ventas"] + v["retenidas_por_fraude"], len(compras))
+        self.assertGreater(v["retenidas_por_fraude"], 0)        # el fraude no cuenta como venta
+        self.assertAlmostEqual(v["ingresos"], sum(v["por_categoria"].values()), places=1)
+        self.assertEqual(sum(v["por_tipo_orden"].values()), v["ventas"])
+        self.assertNotIn("fraude_o_pago", v["por_tipo_orden"])
+        ingresos_top = [total for *_, total in v["mas_vendidos"]]
+        self.assertEqual(ingresos_top, sorted(ingresos_top, reverse=True))
+        self.assertTrue(0 < v["conversion"] < 1)
+
     def test_etapa8_grafo_con_compras_conjuntas(self):
         self.assertGreater(self.resumen[8]["aristas"], 20)
         top = self.p.influyentes(3)
