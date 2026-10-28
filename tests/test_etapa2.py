@@ -157,11 +157,17 @@ class PruebasAsignarPrioridad(unittest.TestCase):
             with self.subTest(tipo=tipo):
                 self.assertEqual(asignar_prioridad(ev(1, tipo)), BAJA)
 
-    def test_fraude_gana_al_tipo(self):
-        self.assertEqual(asignar_prioridad(ev(1, "view", es_fraude=True)), FRAUDE_O_PAGO)
-        self.assertEqual(asignar_prioridad(ev(1, "view", es_fraude="true")), FRAUDE_O_PAGO)
-        self.assertEqual(asignar_prioridad(ev(1, "view", es_fraude=False)), BAJA)
-        self.assertEqual(asignar_prioridad(ev(1, "view", es_fraude="False")), BAJA)
+    def test_fraude_detectado_gana_al_tipo(self):
+        self.assertEqual(asignar_prioridad(ev(1, "view", fraude_predicho=True)), FRAUDE_O_PAGO)
+        self.assertEqual(asignar_prioridad(ev(1, "view", fraude_predicho="true")), FRAUDE_O_PAGO)
+        self.assertEqual(asignar_prioridad(ev(1, "view", fraude_predicho=False)), BAJA)
+        self.assertEqual(asignar_prioridad(ev(1, "view", fraude_predicho="False")), BAJA)
+
+    def test_ignora_la_etiqueta_de_verdad(self):
+        # es_fraude es la respuesta correcta del generador: solo sirve para medir
+        self.assertEqual(asignar_prioridad(ev(1, "view", es_fraude=True)), BAJA)
+        self.assertEqual(asignar_prioridad(ev(1, "purchase", es_fraude=True)), ESTANDAR)
+        self.assertEqual(asignar_prioridad(ev(1, "view", es_fraude=False, fraude_predicho=True)), FRAUDE_O_PAGO)
 
     def test_respeta_la_prioridad_del_generador(self):
         self.assertEqual(asignar_prioridad(ev(1, "view", prioridad=EXPRESS)), EXPRESS)
@@ -187,7 +193,7 @@ class PruebasEtapa2(unittest.TestCase):
         e2.recibir([
             ev(1, "view"),
             ev(2, "purchase"),
-            ev(3, "view", es_fraude=True),
+            ev(3, "view", fraude_predicho=True),
             ev(4, "cart", prioridad=EXPRESS),
         ])
         salida = e2.extraer()
@@ -216,7 +222,7 @@ class PruebasEtapa2(unittest.TestCase):
         # Un fraude que llega en el segundo lote sale antes que lo que ya esperaba
         e2 = Etapa2Prioridad()
         e2.recibir([ev(1), ev(2)])
-        e2.recibir([ev(3, es_fraude=True)])
+        e2.recibir([ev(3, fraude_predicho=True)])
         self.assertEqual(e2.siguiente()["event_time"], 3)
 
     def test_no_modifica_la_entrada(self):
@@ -226,7 +232,7 @@ class PruebasEtapa2(unittest.TestCase):
 
     def test_metricas(self):
         e2 = Etapa2Prioridad()
-        e2.recibir([ev(1), ev(2, "purchase"), ev(3, es_fraude=True)])
+        e2.recibir([ev(1), ev(2, "purchase"), ev(3, fraude_predicho=True)])
         e2.extraer(1)
         m = e2.metricas()
         self.assertEqual(m["recibidos"], 3)

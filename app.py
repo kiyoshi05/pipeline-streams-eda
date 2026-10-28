@@ -3,7 +3,9 @@ from pathlib import Path
 import streamlit as st
 
 from src.etapa0_ingesta.ingesta import leer_csv
-from src.etapa9_servicio.servicio import ServicioRecomendaciones
+from src.etapa6_probabilistico import Etapa6Fraude
+from src.pipeline import Pipeline
+from experimentos.datos_sinteticos import generar_eventos_fraude
 
 
 st.set_page_config(
@@ -14,74 +16,33 @@ st.set_page_config(
 
 
 @st.cache_resource
-def cargar_servicio(ruta_csv, fecha_modificacion):
-    ruta = Path(ruta_csv)
+def cargar_pipeline(ruta_csv, fecha_modificacion, n_sintetico=5_000):
+    """Pasa los eventos por las 10 etapas (src/pipeline.py) y devuelve el pipeline cerrado.
 
+    Con una muestra CSV de REES46 se usan sus filas (sin campos de fraude: la
+    etapa 6 no marca nada). Sin CSV se usa el generador sintético con fraude,
+    así el panel muestra alertas reales de la etapa 6.
+    """
+    ruta = Path(ruta_csv)
     if ruta.is_file():
-        eventos = list(leer_csv(ruta, limite=10_000))
+        stream, lista_negra = leer_csv(ruta, limite=10_000), ()
         origen = f"Muestra CSV: {ruta.name}"
     else:
-        # user_session permite que la etapa 8 detecte productos comprados juntos.
-        eventos = [
-            {
-                "product_id": 101, "user_id": 1, "price": 25,
-                "brand": "Acme", "category_code": "ropa.camisas",
-                "event_type": "view", "user_session": "ropa-1",
-            },
-            {
-                "product_id": 101, "user_id": 2, "price": 25,
-                "brand": "Acme", "category_code": "ropa.camisas",
-                "event_type": "purchase", "user_session": "ropa-2",
-            },
-            {
-                "product_id": 101, "user_id": 3, "price": 25,
-                "brand": "Acme", "category_code": "ropa.camisas",
-                "event_type": "purchase", "user_session": "ropa-3",
-            },
-            {
-                "product_id": 102, "user_id": 1, "price": 28,
-                "brand": "Acme", "category_code": "ropa.camisas",
-                "event_type": "cart", "user_session": "ropa-1",
-            },
-            {
-                "product_id": 102, "user_id": 2, "price": 28,
-                "brand": "Acme", "category_code": "ropa.camisas",
-                "event_type": "purchase", "user_session": "ropa-2",
-            },
-            {
-                "product_id": 102, "user_id": 3, "price": 28,
-                "brand": "Acme", "category_code": "ropa.camisas",
-                "event_type": "purchase", "user_session": "ropa-3",
-            },
-            {
-                "product_id": 103, "user_id": 4, "price": 450,
-                "brand": "Nova", "category_code": "electronica.telefonos",
-                "event_type": "view", "user_session": "electronica-1",
-            },
-            {
-                "product_id": 103, "user_id": 5, "price": 450,
-                "brand": "Nova", "category_code": "electronica.telefonos",
-                "event_type": "purchase", "user_session": "electronica-2",
-            },
-            {
-                "product_id": 104, "user_id": 2, "price": 470,
-                "brand": "Nova", "category_code": "electronica.telefonos",
-                "event_type": "cart", "user_session": "electronica-1",
-            },
-            {
-                "product_id": 104, "user_id": 6, "price": 470,
-                "brand": "Nova", "category_code": "electronica.telefonos",
-                "event_type": "purchase", "user_session": "electronica-2",
-            },
-        ]
-        origen = "Datos de demostración"
+        stream, lista_negra = generar_eventos_fraude(n_sintetico, semilla=42)
+        origen = f"{n_sintetico:,} eventos sintéticos con fraude (no se encontró {ruta_csv})".replace(",", ".")
+    pipeline = Pipeline(lista_negra=lista_negra, n_clusters=8, nprobe=4)
+    pipeline.procesar(stream).cerrar()
+    return pipeline, origen
 
-    servicio = ServicioRecomendaciones(
-        eventos,
-        n_clusters=4,
-        nprobe=4,
-    )
-    return servicio, origen
+
+@st.cache_resource
+def analizar_fraude(n, semilla):
+    """Etapa 6 sobre eventos sintéticos con fraude: devuelve métricas y marcados."""
+    eventos, lista_negra = generar_eventos_fraude(n, semilla=semilla)
+    e6 = Etapa6Fraude(lista_negra=lista_negra, ventana_seg=10, umbral_velocidad=8)
+    anotados = e6.procesar(eventos)
+    marcados = [e for e in anotados if e["fraude_predicho"]]
+    return e6.metricas(), marcados
 
 
 ruta_csv = st.sidebar.text_input(
@@ -92,7 +53,8 @@ ruta_csv = st.sidebar.text_input(
 ruta = Path(ruta_csv)
 fecha_modificacion = ruta.stat().st_mtime_ns if ruta.is_file() else 0
 
-servicio, origen = cargar_servicio(ruta_csv, fecha_modificacion)
+pipeline, origen = cargar_pipeline(ruta_csv, fecha_modificacion)
+servicio = pipeline.servicio
 metricas = servicio.metricas()
 
 st.title("Recomendaciones de productos")
@@ -163,12 +125,23 @@ else:
     )
 
 st.subheader("Alertas de fraude")
+st.caption("Eventos que la etapa 6 marcó como fraude, del más urgente al menos urgente (etapa 2).")
 if servicio.alertas:
-    st.dataframe(servicio.alertas, hide_index=True)
+    st.dataframe(servicio.alertas[:50], hide_index=True)
 else:
-    st.info(
-        "No hay alertas cargadas. La etapa 6 todavía no está conectada en esta versión."
-    )
+    st.info("La etapa 6 no marcó ningún evento: este stream no trae IP ni dispositivo.")
+
+st.subheader("Recorrido de un evento por las 10 etapas")
+evento = pipeline.evento_para_demo()
+st.caption(
+    f"{evento['event_type']} del producto {evento['product_id']} (usuario {evento['user_id']}). "
+    "Cada fila es lo que hizo una etapa con este evento."
+)
+st.dataframe(
+    [{"Etapa": etapa, "Nombre": nombre, "Resultado": resultado}
+     for etapa, nombre, resultado in pipeline.recorrido(evento)],
+    hide_index=True,
+)
 
 st.subheader("Autocompletado")
 prefijo = st.text_input("Escribe el inicio de una marca o categoría")
@@ -185,3 +158,34 @@ st.dataframe(
     ],
     hide_index=True,
 )
+
+st.subheader("Detección de fraude (Etapa 6)")
+st.caption(
+    "Demo con eventos sintéticos: filtro de Bloom (lista negra de IP/dispositivos) "
+    "+ Count-Min Sketch (velocidad por ventana). La muestra REES46 no trae campos "
+    "de fraude, así que esta sección usa el generador sintético."
+)
+n_fraude = st.slider("Eventos sintéticos a analizar", 1_000, 50_000, 10_000, step=1_000)
+metricas_fraude, marcados = analizar_fraude(n_fraude, 42)
+
+f1, f2, f3 = st.columns(3)
+f1.metric("Eventos marcados", metricas_fraude["marcados"])
+f2.metric("Precisión", f"{metricas_fraude['precision']:.1%}" if metricas_fraude["precision"] is not None else "—")
+f3.metric("Recall", f"{metricas_fraude['recall']:.1%}" if metricas_fraude["recall"] is not None else "—")
+
+if marcados:
+    st.dataframe(
+        [
+            {
+                "IP": e.get("ip"),
+                "Dispositivo": e.get("dispositivo_id"),
+                "Tipo": e["event_type"],
+                "Score": e["fraude_score"],
+                "Motivos": ", ".join(e["fraude_motivos"]),
+            }
+            for e in marcados[:20]
+        ],
+        hide_index=True,
+    )
+else:
+    st.info("No se detectaron eventos sospechosos.")
