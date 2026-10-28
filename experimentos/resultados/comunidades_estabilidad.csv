@@ -1,0 +1,7 @@
+experimento,metodo,n,nodos,aristas,semillas,modularidad_media,modularidad_desv,comunidades_media,comunidades_desv,nmi_entre_corridas_media,nmi_entre_corridas_min,nmi_verdad_media,semilla,plataforma
+estabilidad,louvain,1000,200,854,10,0.712321,0.0,6,0.0,1.0,1.0,1.0,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+estabilidad,label_propagation,1000,200,854,10,0.667714,0.014774,16,5.06,0.849151,0.774862,0.824927,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+estabilidad,louvain,10000,1999,8792,10,0.832912,0.000992,51.2,0.92,0.979058,0.966651,0.98413,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+estabilidad,label_propagation,10000,1999,8792,10,0.755146,0.0206,130.7,18.56,0.916361,0.898313,0.934414,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+estabilidad,louvain,100000,19997,88821,10,0.846822,0.000109,171.7,4.76,0.853806,0.837731,0.896164,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+estabilidad,label_propagation,100000,19997,88821,10,0.761598,0.006132,1292.8,58.96,0.944812,0.939319,0.956379,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"

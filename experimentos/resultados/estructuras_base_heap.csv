@@ -1,0 +1,12 @@
+experimento,variante,n,repeticiones,prom_s,desv_s,min_s,mem_pico_bytes,mem_final_bytes,extra,semilla,plataforma
+heap,minheap_propio,1000,100,0.0019036799762398005,0.0004971945366973598,0.0016304999589920044,9316,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,heapq,1000,100,0.0002330749901011586,4.415744898572355e-05,0.0002071000635623932,8996,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,lista_ordenada,1000,10,0.0002729000058025122,7.75796281764931e-06,0.0002640997990965843,40996,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,minheap_propio,10000,100,0.025409620022401214,0.0020966022965723525,0.023424699902534485,85636,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,heapq,10000,100,0.003153413007967174,0.0003522847240778892,0.002862200140953064,85316,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,lista_ordenada,10000,10,0.010265960032120347,0.000516021513757035,0.009619100019335747,405316,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,minheap_propio,100000,50,0.3929478779714555,0.007471751431403604,0.3816137998364866,801444,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,heapq,100000,100,0.04559554898645729,0.003295097843473726,0.04106999980285764,801124,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,lista_ordenada,100000,10,0.8275386299937963,0.03964346882563343,0.7942739999853075,4001124,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,minheap_propio,1000000,3,6.091952566678326,1.0701299982236954,5.352531299926341,8449404,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
+heap,heapq,1000000,7,1.3322613001135843,0.23703122626864875,1.0343359000980854,8448868,56,,42,"Windows 11 | Intel64 Family 6 Model 186 Stepping 2, GenuineIntel | 16 CPU | Python 3.13.14 | energia: corriente"
