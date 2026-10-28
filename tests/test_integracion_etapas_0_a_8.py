@@ -1,11 +1,13 @@
-"""Integración de las etapas del integrante B con las etapas 0, 1 y 6:
+"""Integración de las etapas 0, 1, 2, 3, 4, 6 y 8:
 
-stream sintético -> 0 (cola) -> 1 (limpieza) -> 2 (prioridad) -> 3 (lookup)
--> 4 (índice) -> 6 (fraude) -> 8 (grafo de co-compra)
+stream sintético -> 0 (cola) -> 1 (limpieza) -> 6 (fraude) -> 2 (prioridad)
+-> 3 (lookup) -> 4 (índice) -> 8 (grafo de co-compra)
 
-La etapa 6 va como anotación después de la prioridad: marca cada evento con su
-decisión de fraude y lo deja pasar, así las etapas siguientes reciben todo. Las
-etapas 5, 7 y 9 están en otras ramas y encajarán igual sin cambiar estas pruebas.
+La etapa 6 va justo después de la limpieza: recibe el lote ordenado por tiempo
+(lo que necesita su ventana de velocidad), marca cada evento con su decisión de
+fraude y lo deja pasar. La etapa 2 prioriza con esa decisión (fraude_predicho)
+y nunca con la etiqueta es_fraude, que solo sirve para medir. El pipeline de las
+10 etapas completo se prueba en test_pipeline.py.
 """
 
 import unittest
@@ -36,11 +38,10 @@ class PruebasIntegracion(unittest.TestCase):
         cls.prioridades_por_lote = []
         for lote in cls.e0.procesar_stream(iterar_eventos(20_000, semilla=42)):
             limpio = cls.e1.procesar(lote).eventos
-            cls.e2.recibir(limpio)
+            cls.e2.recibir(cls.e6.procesar(limpio))
             urgentes = cls.e2.extraer()
             cls.prioridades_por_lote.append([e["prioridad"] for e in urgentes])
-            anotados = cls.e6.procesar(cls.e4.procesar(cls.e3.procesar(urgentes)))
-            eventos = cls.e8.procesar(anotados)
+            eventos = cls.e8.procesar(cls.e4.procesar(cls.e3.procesar(urgentes)))
             cls.salida.extend(eventos)
 
     def test_ningun_evento_se_pierde(self):
@@ -115,7 +116,7 @@ class PruebasIntegracion(unittest.TestCase):
 
 class PruebasIntegracionFraude(unittest.TestCase):
     """La etapa 6 detectando fraude de punta a punta sobre el pipeline real:
-    stream con fraude -> 0 (cola) -> 1 (limpieza) -> 2 (prioridad) -> 6 (fraude).
+    stream con fraude -> 0 (cola) -> 1 (limpieza) -> 6 (fraude) -> 2 (prioridad).
     """
 
     @classmethod
@@ -127,11 +128,13 @@ class PruebasIntegracionFraude(unittest.TestCase):
         e2 = Etapa2Prioridad()
         cls.e6 = Etapa6Fraude(lista_negra=lista_negra, ventana_seg=10, umbral_velocidad=8)
         cls.procesados = 0
+        cls.prioridades_por_lote = []
         for lote in e0.procesar_stream(eventos):
             limpio = e1.procesar(lote).eventos
-            e2.recibir(limpio)
-            anotados = cls.e6.procesar(e2.extraer())
-            cls.procesados += len(anotados)
+            e2.recibir(cls.e6.procesar(limpio))
+            urgentes = e2.extraer()
+            cls.prioridades_por_lote.append([(e["prioridad"], e["fraude_predicho"]) for e in urgentes])
+            cls.procesados += len(urgentes)
 
     def test_no_pierde_eventos(self):
         self.assertEqual(self.e6.metricas()["recibidos"], self.procesados)
@@ -143,7 +146,23 @@ class PruebasIntegracionFraude(unittest.TestCase):
         self.assertGreater(self.fraude_real, 0)
         self.assertEqual(m["fp"], 0)            # ninguna falsa alarma sobre este generador
         self.assertEqual(m["precision"], 1.0)
-        self.assertGreater(m["recall"], 0.8)    # casi todo el fraude, pese al reordenamiento por prioridad
+        self.assertGreater(m["recall"], 0.8)    # casi todo el fraude: la etapa recibe los lotes en orden de tiempo
+
+    def test_el_fraude_detectado_sale_primero(self):
+        # La etapa 2 usa la decisión de la etapa 6: en cada lote, todo lo marcado
+        # como fraude sale antes que el resto, con prioridad 0.
+        marcados = 0
+        for lote in self.prioridades_por_lote:
+            for prioridad, predicho in lote:
+                self.assertEqual(prioridad == 0, bool(predicho))
+            vistos_normales = False
+            for prioridad, predicho in lote:
+                if not predicho:
+                    vistos_normales = True
+                self.assertFalse(predicho and vistos_normales)
+            marcados += sum(1 for _, predicho in lote if predicho)
+        self.assertEqual(marcados, self.e6.metricas()["marcados"])
+        self.assertGreater(marcados, 0)
 
 
 if __name__ == "__main__":

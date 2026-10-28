@@ -1,8 +1,8 @@
 """Etapa 2: cola con prioridades.
 
-Recibe de la etapa 1 un lote limpio y ordenado por tiempo, y entrega a la
-etapa 3 los eventos en orden de urgencia. Usa el MinHeap de heap.py con la
-clave (prioridad, event_time, contador, evento):
+Recibe un lote limpio y ordenado por tiempo, ya revisado por el detector de
+fraude de la etapa 6, y entrega a la etapa 3 los eventos en orden de urgencia.
+Usa el MinHeap de heap.py con la clave (prioridad, event_time, contador, evento):
 
     prioridad    menor número = más urgente
     event_time   a igual prioridad, sale primero el más antiguo
@@ -50,14 +50,18 @@ def asignar_prioridad(evento):
     """Prioridad de 0 (más urgente) a 3.
 
     1. Si el evento trae 'prioridad' válida (la pone el generador), se usa.
-    2. Si trae es_fraude verdadero: FRAUDE_O_PAGO.
+    2. Si la etapa 6 lo marcó como fraude (fraude_predicho): FRAUDE_O_PAGO.
     3. Si es una compra (purchase): ESTANDAR.
     4. Cualquier otro (view, cart, remove_from_cart): BAJA.
+
+    Nunca se mira es_fraude: es la etiqueta de verdad del generador sintético
+    y solo sirve para medir aciertos. Priorizar con ella sería usar la
+    respuesta correcta, que en producción no existe.
     """
     p = _prioridad_valida(campo(evento, "prioridad"))
     if p is not None:
         return p
-    if _es_verdadero(campo(evento, "es_fraude", False)):
+    if _es_verdadero(campo(evento, "fraude_predicho", False)):
         return FRAUDE_O_PAGO
     if campo(evento, "event_type") == "purchase":
         return ESTANDAR
