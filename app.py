@@ -3,7 +3,9 @@ from pathlib import Path
 import streamlit as st
 
 from src.etapa0_ingesta.ingesta import leer_csv
+from src.etapa6_probabilistico import Etapa6Fraude
 from src.etapa9_servicio.servicio import ServicioRecomendaciones
+from experimentos.datos_sinteticos import generar_eventos_fraude
 
 
 st.set_page_config(
@@ -82,6 +84,16 @@ def cargar_servicio(ruta_csv, fecha_modificacion):
         nprobe=4,
     )
     return servicio, origen
+
+
+@st.cache_resource
+def analizar_fraude(n, semilla):
+    """Etapa 6 sobre eventos sintéticos con fraude: devuelve métricas y marcados."""
+    eventos, lista_negra = generar_eventos_fraude(n, semilla=semilla)
+    e6 = Etapa6Fraude(lista_negra=lista_negra, ventana_seg=10, umbral_velocidad=8)
+    anotados = e6.procesar(eventos)
+    marcados = [e for e in anotados if e["fraude_predicho"]]
+    return e6.metricas(), marcados
 
 
 ruta_csv = st.sidebar.text_input(
@@ -185,3 +197,34 @@ st.dataframe(
     ],
     hide_index=True,
 )
+
+st.subheader("Detección de fraude (Etapa 6)")
+st.caption(
+    "Demo con eventos sintéticos: filtro de Bloom (lista negra de IP/dispositivos) "
+    "+ Count-Min Sketch (velocidad por ventana). La muestra REES46 no trae campos "
+    "de fraude, así que esta sección usa el generador sintético."
+)
+n_fraude = st.slider("Eventos sintéticos a analizar", 1_000, 50_000, 10_000, step=1_000)
+metricas_fraude, marcados = analizar_fraude(n_fraude, 42)
+
+f1, f2, f3 = st.columns(3)
+f1.metric("Eventos marcados", metricas_fraude["marcados"])
+f2.metric("Precisión", f"{metricas_fraude['precision']:.1%}" if metricas_fraude["precision"] is not None else "—")
+f3.metric("Recall", f"{metricas_fraude['recall']:.1%}" if metricas_fraude["recall"] is not None else "—")
+
+if marcados:
+    st.dataframe(
+        [
+            {
+                "IP": e.get("ip"),
+                "Dispositivo": e.get("dispositivo_id"),
+                "Tipo": e["event_type"],
+                "Score": e["fraude_score"],
+                "Motivos": ", ".join(e["fraude_motivos"]),
+            }
+            for e in marcados[:20]
+        ],
+        hide_index=True,
+    )
+else:
+    st.info("No se detectaron eventos sospechosos.")
