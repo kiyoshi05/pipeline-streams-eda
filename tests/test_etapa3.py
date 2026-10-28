@@ -264,6 +264,22 @@ class PruebasEtapa3(unittest.TestCase):
         self.assertEqual(e3.usuarios_por_producto(), {5: {1}, 6: {2}})
         self.assertEqual(e3.usuarios_por_producto(minimo=4), {5: {1}})
 
+    def test_compradores_por_producto(self):
+        e3 = Etapa3Lookup()
+        e3.procesar([ev(1, "purchase", 5, usuario=1), ev(2, "purchase", 5, usuario=2),
+                     ev(3, "view", 6, usuario=3), ev(4, "purchase", 5, usuario=1)])
+        self.assertEqual(e3.compradores_por_producto(), {5: {1, 2}})   # una vista no es una compra
+
+    def test_compradores_igual_que_la_etapa_7(self):
+        from experimentos.stream_completo import generar_stream
+        from src.etapa1_preprocesamiento import Etapa1Preprocesamiento
+        from src.etapa7_similitud.minhash_lsh import conjuntos_usuarios_por_producto
+        eventos, _ = generar_stream(1_000)
+        limpios = Etapa1Preprocesamiento().procesar(eventos).eventos
+        e3 = Etapa3Lookup()
+        e3.procesar(limpios)
+        self.assertEqual(e3.compradores_por_producto(), conjuntos_usuarios_por_producto(limpios))
+
     def test_metricas(self):
         e3 = Etapa3Lookup(capacidad_cache=1)
         e3.procesar([ev(1, "view", 1), ev(2, "view", 2)])

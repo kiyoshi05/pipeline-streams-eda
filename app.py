@@ -6,6 +6,7 @@ from src.etapa0_ingesta.ingesta import leer_csv
 from src.etapa6_probabilistico import Etapa6Fraude
 from src.pipeline import Pipeline
 from experimentos.datos_sinteticos import generar_eventos_fraude
+from experimentos.stream_completo import aumentar_filas, generar_stream
 
 
 st.set_page_config(
@@ -19,18 +20,18 @@ st.set_page_config(
 def cargar_pipeline(ruta_csv, fecha_modificacion, n_sintetico=5_000):
     """Pasa los eventos por las 10 etapas (src/pipeline.py) y devuelve el pipeline cerrado.
 
-    Con una muestra CSV de REES46 se usan sus filas (sin campos de fraude: la
-    etapa 6 no marca nada). Sin CSV se usa el generador sintético con fraude,
-    así el panel muestra alertas reales de la etapa 6.
+    Con un CSV con el formato de REES46 se usan sus filas y se les agregan los
+    campos del stream (ip, dispositivo, medio de pago, prioridad y algo de
+    fraude). Sin CSV se usa el stream sintético completo.
     """
     ruta = Path(ruta_csv)
     if ruta.is_file():
-        stream, lista_negra = leer_csv(ruta, limite=10_000), ()
-        origen = f"Muestra CSV: {ruta.name}"
+        stream, lista_negra = aumentar_filas(leer_csv(ruta, limite=10_000), semilla=42)
+        origen = f"Muestra CSV: {ruta.name}, con los campos del stream agregados"
     else:
-        stream, lista_negra = generar_eventos_fraude(n_sintetico, semilla=42)
-        origen = f"{n_sintetico:,} eventos sintéticos con fraude (no se encontró {ruta_csv})".replace(",", ".")
-    pipeline = Pipeline(lista_negra=lista_negra, n_clusters=8, nprobe=4)
+        stream, lista_negra = generar_stream(n_sintetico, semilla=42)
+        origen = f"{n_sintetico:,} eventos del stream sintético completo (no se encontró {ruta_csv})".replace(",", ".")
+    pipeline = Pipeline(lista_negra=lista_negra, n_clusters=8, nprobe=4, capacidad_cache=50)
     pipeline.procesar(stream).cerrar()
     return pipeline, origen
 
@@ -140,6 +141,33 @@ st.caption(
 st.dataframe(
     [{"Etapa": etapa, "Nombre": nombre, "Resultado": resultado}
      for etapa, nombre, resultado in pipeline.recorrido(evento)],
+    hide_index=True,
+)
+
+st.subheader("Consulta de productos")
+st.caption("Ficha por la caché LRU y la tabla hash (etapa 3); rango de precios con el B+Tree (etapa 4).")
+c1, c2 = st.columns(2)
+with c1:
+    id_ficha = st.selectbox("Producto", sorted(servicio.vector_por_id), key="ficha")
+    st.json(pipeline.consultar_producto(id_ficha) or {})
+    cache = pipeline.e3.cache
+    st.caption(f"Caché: {cache.aciertos} aciertos y {cache.fallos} fallos ({cache.tasa_aciertos:.0%}).")
+with c2:
+    desde, hasta = st.slider("Rango de precio", 0.0, 2000.0, (100.0, 300.0), step=10.0)
+    st.dataframe(
+        [{"Precio": precio, "Producto": pid} for precio, pid in pipeline.productos_por_precio(desde, hasta, limite=50)],
+        hide_index=True,
+    )
+
+st.subheader("Similitud frente al método exacto")
+st.caption("recall@5 promedio sobre 30 productos: KD-Tree e IVF contra KNN exacto (etapa 5); "
+           "MinHash + LSH contra Jaccard exacto (etapa 7).")
+st.dataframe(
+    [{"Método": metodo, "Contra": fila["contra"],
+      "recall@5": None if fila["recall"] is None else round(fila["recall"], 2),
+      "ms por consulta": None if fila["ms_por_consulta"] is None else round(fila["ms_por_consulta"], 3),
+      "Consultas": fila["consultas"]}
+     for metodo, fila in pipeline.comparar_similitud(k=5).items()],
     hide_index=True,
 )
 

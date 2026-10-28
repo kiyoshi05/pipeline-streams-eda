@@ -4,7 +4,8 @@ Recibe un lote limpio y ordenado por tiempo, ya revisado por el detector de
 fraude de la etapa 6, y entrega a la etapa 3 los eventos en orden de urgencia.
 Usa el MinHeap de heap.py con la clave (prioridad, event_time, contador, evento):
 
-    prioridad    menor número = más urgente
+    prioridad    menor número = más urgente:
+                 0 fraude o pago, 1 express, 2 estándar, 3 programada, 4 navegación
     event_time   a igual prioridad, sale primero el más antiguo
     contador     a igual tiempo, se respeta el orden de llegada; además
                  evita que Python compare dos eventos (dict) entre sí
@@ -21,11 +22,13 @@ from src.etapa2_prioridad.heap import MinHeap
 FRAUDE_O_PAGO = 0
 EXPRESS = 1
 ESTANDAR = 2
-BAJA = 3
+PROGRAMADA = 3
+BAJA = 4
 NOMBRES = {
     FRAUDE_O_PAGO: "fraude_o_pago",
     EXPRESS: "express",
     ESTANDAR: "estandar",
+    PROGRAMADA: "programada",
     BAJA: "baja",
 }
 _VERDADEROS = frozenset({"1", "true", "t", "si", "sí", "yes", "y"})
@@ -38,7 +41,7 @@ def _es_verdadero(valor):
 
 
 def _prioridad_valida(valor):
-    """Devuelve la prioridad como entero si está entre 0 y 3; si no, None."""
+    """Devuelve la prioridad como entero si está entre 0 y 4; si no, None."""
     try:
         p = int(valor)
     except (TypeError, ValueError):
@@ -47,22 +50,24 @@ def _prioridad_valida(valor):
 
 
 def asignar_prioridad(evento):
-    """Prioridad de 0 (más urgente) a 3.
+    """Prioridad de 0 (más urgente) a 4.
 
-    1. Si el evento trae 'prioridad' válida (la pone el generador), se usa.
-    2. Si la etapa 6 lo marcó como fraude (fraude_predicho): FRAUDE_O_PAGO.
-    3. Si es una compra (purchase): ESTANDAR.
+    1. Si la etapa 6 lo marcó como fraude (fraude_predicho): FRAUDE_O_PAGO,
+       aunque la orden sea express: una alerta va antes que cualquier envío.
+    2. Si el evento trae 'prioridad' válida (el tipo de orden: express o
+       programada), se usa.
+    3. Si es una compra (purchase) sin tipo de orden: ESTANDAR.
     4. Cualquier otro (view, cart, remove_from_cart): BAJA.
 
     Nunca se mira es_fraude: es la etiqueta de verdad del generador sintético
     y solo sirve para medir aciertos. Priorizar con ella sería usar la
     respuesta correcta, que en producción no existe.
     """
+    if _es_verdadero(campo(evento, "fraude_predicho", False)):
+        return FRAUDE_O_PAGO
     p = _prioridad_valida(campo(evento, "prioridad"))
     if p is not None:
         return p
-    if _es_verdadero(campo(evento, "fraude_predicho", False)):
-        return FRAUDE_O_PAGO
     if campo(evento, "event_type") == "purchase":
         return ESTANDAR
     return BAJA

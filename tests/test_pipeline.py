@@ -23,8 +23,7 @@ class PruebasPipelineCompleto(unittest.TestCase):
     def test_recorre_las_10_etapas_en_orden(self):
         self.assertEqual(ORDEN_FLUJO, (0, 1, 6, 2, 3, 4, 8))
         self.assertEqual(sorted(ORDEN_FLUJO + ORDEN_CIERRE), list(range(10)))
-        # Cada etapa trabajó y midió su tiempo; la 7 la construye el servicio de la 9
-        self.assertEqual(set(self.p.tiempos), set(ETAPAS) - {7})
+        self.assertEqual(set(self.p.tiempos), set(ETAPAS))   # cada etapa trabajó y midió su tiempo
         self.assertEqual(set(self.p.resumen()), set(ETAPAS))
 
     def test_ningun_evento_valido_se_pierde(self):

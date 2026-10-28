@@ -12,6 +12,14 @@ from src.etapa8_grafo.ranking import mayores_k
 from src.etapa9_servicio.topk import top_k
 from src.etapa9_servicio.trie import Trie
 
+# MinHash + LSH: con b bandas de r filas, dos productos pasan a candidatos si su
+# Jaccard supera aproximadamente (1/b)^(1/r). Con 20 x 5 ese umbral era ~0,55 y
+# casi no aparecían vecinos (los productos tienen pocos compradores en común);
+# con 50 x 2 baja a ~0,14 y el recall@5 contra Jaccard exacto sube de 0,46 a 0,99
+# con 1K eventos. Los candidatos se ordenan igual por Jaccard exacto.
+LSH_HASHES = 100
+LSH_BANDAS = 50
+
 
 class ServicioRecomendaciones:
     """Integra recomendaciones, similitud por compras y resultados de etapa 8."""
@@ -24,25 +32,44 @@ class ServicioRecomendaciones:
         pagerank=None,
         comunidades=None,
         alertas=None,
+        conjuntos_compra=None,
+        lsh_hashes=LSH_HASHES,
+        lsh_bandas=LSH_BANDAS,
+        vectores=None,
+        indice=None,
+        indice_lsh=None,
     ):
+        """Los índices de las etapas 5 y 7 (``vectores``, ``indice`` IVF e
+        ``indice_lsh``) pueden llegar ya construidos desde el pipeline, que así
+        mide su tiempo por separado; si no llegan, se construyen aquí."""
         self.eventos = list(eventos)
 
-        self.vectores, _ = construir_vectores_productos(self.eventos)
+        if vectores is None:
+            vectores, _ = construir_vectores_productos(self.eventos)
+        self.vectores = list(vectores)
         self.vector_por_id = dict(self.vectores)
 
-        self.indice = None
-        if self.vectores:
+        self.indice = indice
+        if self.indice is None and self.vectores:
             self.indice = IVFFlat(
                 self.vectores,
                 n_clusters=n_clusters,
                 nprobe=nprobe,
             )
 
-        self.conjuntos_compra = conjuntos_usuarios_por_producto(self.eventos)
-        self.indice_lsh = MinHashLSH(
-            num_hashes=100,
-            bandas=20,
-        ).ajustar(self.conjuntos_compra)
+        # Compradores por producto: los entrega la matriz de compras de la etapa 3
+        # (pipeline completo); si no llegan, se calculan desde los eventos.
+        self.conjuntos_compra = (
+            dict(conjuntos_compra)
+            if conjuntos_compra is not None
+            else conjuntos_usuarios_por_producto(self.eventos)
+        )
+        self.indice_lsh = indice_lsh
+        if self.indice_lsh is None:
+            self.indice_lsh = MinHashLSH(
+                num_hashes=lsh_hashes,
+                bandas=lsh_bandas,
+            ).ajustar(self.conjuntos_compra)
 
         self.trie = Trie()
         for evento in self.eventos:

@@ -6,7 +6,10 @@ Recibe los eventos de la etapa 2 (en orden de urgencia) y mantiene:
                     (categoría, marca, último precio y contadores por tipo)
     cache           CacheLRU   fichas consultadas hace poco
     interacciones   MatrizDispersa usuario x producto con un peso por tipo de
-                    evento; la usa la etapa 7 para la similitud
+                    evento (feedback implícito)
+    compras         MatrizDispersa usuario x producto con las compras; sus
+                    columnas son los compradores de cada producto, la entrada de
+                    MinHash + LSH en la etapa 7
 
 Consultar un producto pasa primero por la caché y, si no está, por el
 catálogo. Cuando un evento actualiza una ficha, se quita de la caché
@@ -61,6 +64,7 @@ class Etapa3Lookup:
         self.catalogo = TablaHash()
         self.cache = CacheLRU(capacidad_cache)
         self.interacciones = MatrizDispersa()
+        self.compras = MatrizDispersa()
         self.pesos = dict(PESOS_INTERACCION if pesos is None else pesos)
         self._recibidos = 0
         self._consultas = 0
@@ -103,6 +107,8 @@ class Etapa3Lookup:
         peso = self.pesos.get(tipo, 0.0)
         if user_id is not None and peso:
             self.interacciones.sumar(user_id, product_id, peso)
+        if user_id is not None and tipo == "purchase":
+            self.compras.sumar(user_id, product_id, 1)
 
     def consultar(self, product_id):
         """Ficha del producto (copia), o None si nunca se vio. Pasa primero por la caché."""
@@ -125,6 +131,10 @@ class Etapa3Lookup:
         """{product_id: conjunto de user_id}: entrada para MinHash + LSH de la etapa 7."""
         return self.interacciones.conjuntos_por_columna(minimo)
 
+    def compradores_por_producto(self):
+        """{product_id: conjunto de user_id que lo compraron}: entrada de MinHash + LSH (etapa 7)."""
+        return self.compras.conjuntos_por_columna()
+
     def metricas(self):
         n_usuarios, n_productos = self.interacciones.forma
         return {
@@ -139,4 +149,5 @@ class Etapa3Lookup:
             "matriz_productos": n_productos,
             "matriz_celdas": self.interacciones.nnz,
             "matriz_densidad": self.interacciones.densidad,
+            "compras_celdas": self.compras.nnz,
         }

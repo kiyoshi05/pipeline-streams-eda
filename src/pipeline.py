@@ -33,6 +33,7 @@ Uso típico:
     p.recorrido(p.evento_para_demo())  # qué le pasó a un evento en cada etapa
 """
 
+import random
 from collections import Counter
 from time import perf_counter
 
@@ -44,9 +45,12 @@ from src.etapa2_prioridad.prioridad import Etapa2Prioridad
 from src.etapa3_lookup import Etapa3Lookup
 from src.etapa4_indice import Etapa4Indice
 from src.etapa5_multidimensional.indice_productos import IndiceProductos
+from src.etapa5_multidimensional.knn import knn_exacto
 from src.etapa6_probabilistico import Etapa6Fraude
+from src.etapa7_similitud.ivf import IVFFlat
+from src.etapa7_similitud.minhash_lsh import MinHashLSH
 from src.etapa8_grafo import Etapa8Grafo, mayores_k
-from src.etapa9_servicio.servicio import ServicioRecomendaciones
+from src.etapa9_servicio.servicio import LSH_BANDAS, LSH_HASHES, ServicioRecomendaciones
 
 ETAPAS = {
     0: "Ingesta y buffer",
@@ -84,7 +88,7 @@ class Pipeline:
         self.eventos = []        # todo lo que salió de la etapa 8: entrada de las etapas 5, 7 y 9
         self.alertas = []        # eventos marcados como fraude por la etapa 6, en orden de urgencia
         self.lotes = 0
-        self.tiempos = Counter()  # segundos acumulados por etapa (la 7 va sumada en la 9)
+        self.tiempos = Counter()  # segundos acumulados por etapa
         self._e5 = None
         self._servicio = None
 
@@ -139,15 +143,24 @@ class Pipeline:
         t = perf_counter()
         self._e5 = IndiceProductos(self.eventos)
         t = self._medir(5, t)
-        # El servicio arma la etapa 7 (IVF y MinHash + LSH) y recibe las salidas de las etapas 6 y 8.
-        # Por eso el tiempo de la etapa 7 queda sumado en el de la 9 (no hay una medición aparte).
+        # Etapa 7: IVF sobre los vectores de la etapa 5 y MinHash + LSH sobre la
+        # matriz de compras de la etapa 3. Se arman aquí para medirlas aparte.
+        compradores = self.e3.compradores_por_producto()
+        indice_ivf = IVFFlat(self._e5.vectores, n_clusters=self.n_clusters, nprobe=self.nprobe)             if self._e5.vectores else None
+        indice_lsh = MinHashLSH(num_hashes=LSH_HASHES, bandas=LSH_BANDAS).ajustar(compradores)
+        t = self._medir(7, t)
+        # Etapa 9: el servicio recibe los índices ya hechos y las salidas de las etapas 6 y 8.
         self._servicio = ServicioRecomendaciones(
             self.eventos,
             n_clusters=self.n_clusters,
             nprobe=self.nprobe,
+            vectores=self._e5.vectores,
+            indice=indice_ivf,
+            indice_lsh=indice_lsh,
             pagerank=self.e8.puntajes("pagerank"),
             comunidades=self.e8.comunidades("louvain"),
             alertas=[self._alerta(e) for e in self.alertas],
+            conjuntos_compra=compradores,   # matriz de compras de la etapa 3
         )
         self._medir(9, t)
         return self
@@ -188,7 +201,7 @@ class Pipeline:
             1: {"validos": m1["entregados"], "descartados": m1["descartados"], "duplicados": m1["duplicados"]},
             6: {"marcados": m6["marcados"], "precision": m6["precision"], "recall": m6["recall"]},
             2: self.e2.metricas()["por_prioridad"],
-            3: {k: v for k, v in self.e3.metricas().items() if k in ("productos", "matriz_celdas", "cache_tasa_aciertos")},
+            3: {k: v for k, v in self.e3.metricas().items() if k in ("productos", "matriz_celdas", "compras_celdas")},
             4: {k: v for k, v in self.e4.metricas().items() if k in ("eventos_indexados", "altura_tiempo", "altura_precio")},
             8: {k: v for k, v in self.e8.metricas().items() if k in ("compras", "productos", "aristas")},
             5: {"productos_indexados": len(self.indice_productos.vector_por_id)},
@@ -251,6 +264,116 @@ class Pipeline:
             return "sin ficha"
         return (f"{ficha['vistas']} vistas, {ficha['carritos']} carritos, {ficha['compras']} compras, "
                 f"categoría {ficha['category_code']}")
+
+    # --- Consultas de productos (etapas 3 y 4) -------------------------------------------
+
+    def consultar_producto(self, product_id):
+        """Ficha del producto: pasa primero por la caché LRU y luego por la tabla hash (etapa 3)."""
+        return self.e3.consultar(product_id)
+
+    def productos_por_precio(self, minimo=None, maximo=None, limite=None):
+        """[(precio, product_id)] en el rango, del más barato al más caro (B+Tree, etapa 4)."""
+        return self.e4.productos_por_precio(minimo, maximo, limite)
+
+    def eventos_entre(self, desde, hasta):
+        """Eventos con desde <= event_time <= hasta, en orden de tiempo (B+Tree, etapa 4)."""
+        return self.e4.eventos_entre(desde, hasta)
+
+    def simular_consultas(self, n=1_000, semilla=42):
+        """Simula n visitas a fichas de producto con la popularidad observada (vistas).
+
+        Mide la caché como la usaría la tienda: los productos más vistos se
+        consultan más y deberían quedarse en la caché. Devuelve la tasa de
+        aciertos de esas n consultas.
+        """
+        fichas = list(self.e3.catalogo.valores())
+        if not fichas:
+            return 0.0
+        azar = random.Random(semilla)
+        pesos = [f["vistas"] + 1 for f in fichas]
+        antes = (self.e3.cache.aciertos, self.e3.cache.fallos)
+        for f in azar.choices(fichas, weights=pesos, k=n):
+            self.e3.consultar(f["product_id"])
+        aciertos = self.e3.cache.aciertos - antes[0]
+        fallos = self.e3.cache.fallos - antes[1]
+        return aciertos / (aciertos + fallos) if aciertos + fallos else 0.0
+
+    # --- Similitud frente al método exacto (etapas 5 y 7) ----------------------------------
+
+    def comparar_similitud(self, k=5, muestras=30, semilla=42):
+        """recall@k y tiempo de cada método contra su versión exacta.
+
+        Vectores de producto (etapa 5): KD-Tree e IVF contra KNN exacto por
+        fuerza bruta. Compradores (etapa 7): MinHash + LSH contra Jaccard exacto
+        con todos los productos. Se promedia sobre ``muestras`` productos.
+        """
+        azar = random.Random(semilla)
+        e5, servicio = self.indice_productos, self.servicio
+        ids = sorted(e5.vector_por_id)
+        elegidos = azar.sample(ids, min(muestras, len(ids)))
+        tiempos, recall = Counter(), Counter()
+        for pid in elegidos:
+            v = e5.vector_por_id[pid]
+            t = perf_counter()
+            exactos = {p for p, _ in knn_exacto(e5.vectores, v, k, excluir_id=pid)}
+            t = self._cronometrar(tiempos, "knn_exacto", t)
+            kd = {p for p, _ in e5.kd_tree.buscar(v, k, excluir_id=pid)}
+            t = self._cronometrar(tiempos, "kd_tree", t)
+            ivf = {p for p, _ in servicio.indice.buscar(v, k, excluir_id=pid)} if servicio.indice else set()
+            self._cronometrar(tiempos, "ivf", t)
+            if exactos:
+                recall["kd_tree"] += len(kd & exactos) / len(exactos)
+                recall["ivf"] += len(ivf & exactos) / len(exactos)
+        n_vec = len(elegidos)
+
+        conjuntos = servicio.conjuntos_compra
+        con_vecinos = []
+        for pid in sorted(conjuntos):
+            exactos = self._jaccard_exacto(conjuntos, pid, k)
+            if exactos:
+                con_vecinos.append((pid, exactos))
+        elegidos_lsh = azar.sample(con_vecinos, min(muestras, len(con_vecinos)))
+        for pid, exactos in elegidos_lsh:
+            t = perf_counter()
+            lsh = {p for p, _ in servicio.similares_por_compra(pid, k)}
+            self._cronometrar(tiempos, "minhash_lsh", t)
+            recall["minhash_lsh"] += len(lsh & exactos) / len(exactos)
+        t = perf_counter()
+        for pid, _ in elegidos_lsh:
+            self._jaccard_exacto(conjuntos, pid, k)
+        self._cronometrar(tiempos, "jaccard_exacto", t)
+        n_lsh = len(elegidos_lsh)
+
+        def fila(metodo, base, n):
+            return {"recall": recall[metodo] / n if n and metodo in recall else (1.0 if n else None),
+                    "ms_por_consulta": 1000 * tiempos[metodo] / n if n else None, "contra": base, "consultas": n}
+
+        return {
+            "knn_exacto": fila("knn_exacto", "es la referencia", n_vec),
+            "kd_tree": fila("kd_tree", "knn_exacto", n_vec),
+            "ivf": fila("ivf", "knn_exacto", n_vec),
+            "jaccard_exacto": fila("jaccard_exacto", "es la referencia", n_lsh),
+            "minhash_lsh": fila("minhash_lsh", "jaccard_exacto", n_lsh),
+        }
+
+    @staticmethod
+    def _jaccard_exacto(conjuntos, pid, k):
+        """Los k productos con mayor Jaccard (> 0) contra pid, por fuerza bruta."""
+        a = conjuntos[pid]
+        puntajes = []
+        for otro, b in conjuntos.items():
+            if otro != pid:
+                comunes = len(a & b)
+                if comunes:
+                    puntajes.append((comunes / len(a | b), otro))
+        puntajes.sort(key=lambda x: (-x[0], str(x[1])))
+        return {p for _, p in puntajes[:k]}
+
+    @staticmethod
+    def _cronometrar(tiempos, metodo, desde):
+        ahora = perf_counter()
+        tiempos[metodo] += ahora - desde
+        return ahora
 
     def influyentes(self, k=5):
         return mayores_k(self.servicio.pagerank, k)
