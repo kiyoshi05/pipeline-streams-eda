@@ -129,13 +129,37 @@ class PruebasEtapa6Fraude(unittest.TestCase):
         self.assertFalse(salida[0]["fraude_predicho"])
 
     def test_velocidad_marca_tras_el_umbral(self):
-        e6 = Etapa6Fraude(lista_negra=[], ventana_seg=10, umbral_velocidad=5)
+        # Modo evento por evento (sin la segunda pasada sobre el lote)
+        e6 = Etapa6Fraude(lista_negra=[], ventana_seg=10, umbral_velocidad=5, marcar_rafaga_completa=False)
         lote = [ev(1000, "5.5.5.5", "dr", es_fraude=True) for _ in range(5)]
         salida = e6.procesar(lote)
         # Los primeros 4 aún no cruzan el umbral; a partir del 5.º sí.
         self.assertFalse(salida[0]["fraude_predicho"])
         self.assertTrue(salida[-1]["fraude_predicho"])
         self.assertIn("velocidad", salida[-1]["fraude_motivos"])
+
+    def test_rafaga_completa_marca_los_primeros(self):
+        # Con la segunda pasada, toda la ráfaga de la misma ventana queda marcada
+        e6 = Etapa6Fraude(lista_negra=[], ventana_seg=10, umbral_velocidad=5)
+        lote = [ev(1000, "5.5.5.5", "dr", es_fraude=True) for _ in range(5)]
+        lote.append(ev(1003, "1.1.1.1", "dnormal"))          # otro identificador: no se toca
+        salida = e6.procesar(lote)
+        self.assertTrue(all(s["fraude_predicho"] for s in salida[:5]))
+        self.assertIn("rafaga", salida[0]["fraude_motivos"])
+        self.assertFalse(salida[5]["fraude_predicho"])
+        self.assertEqual(e6.metricas()["marcados_por_rafaga"], 4)
+
+    def test_rafaga_no_cruza_de_ventana(self):
+        e6 = Etapa6Fraude(lista_negra=[], ventana_seg=10, umbral_velocidad=5)
+        lote = [ev(980, "5.5.5.5", "dr")] + [ev(1000, "5.5.5.5", "dr") for _ in range(5)]
+        salida = e6.procesar(lote)
+        self.assertFalse(salida[0]["fraude_predicho"])        # ventana anterior: no es parte de la ráfaga
+
+    def test_score_coherente_con_la_decision(self):
+        eventos, lista_negra = generar_eventos_fraude(5_000, semilla=3)
+        salida = Etapa6Fraude(lista_negra=lista_negra).procesar(eventos)
+        for s in salida:
+            self.assertEqual(s["fraude_score"] >= 0.5, s["fraude_predicho"])
 
     def test_sospechoso_queda_fichado(self):
         # Tras disparar velocidad, el siguiente evento del actor se marca al instante.

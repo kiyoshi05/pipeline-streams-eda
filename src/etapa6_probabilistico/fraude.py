@@ -19,6 +19,15 @@ Un evento se marca como fraude si cae en la lista negra **o** supera el umbral
 de velocidad. Esto detecta tanto al defraudador ya fichado como al nuevo que aún
 no está en ninguna lista pero se delata por su ritmo.
 
+Ráfaga completa: el lote llega entero antes de seguir a la etapa 2, así que
+cuando un identificador cruza el umbral también se marcan los eventos
+anteriores de ese mismo identificador en esa misma ventana (motivo "rafaga").
+Sin esto, los primeros ``umbral - 1`` eventos de cada ráfaga pasaban sin marcar.
+Se puede apagar con ``marcar_rafaga_completa=False``.
+
+El score va de 0 a 1 y es coherente con la decisión: 0,5 o más si el evento
+quedó marcado y menos de 0,5 si no.
+
 Además, cuando un identificador dispara la alarma de velocidad se guarda en una
 lista de sospechosos en caliente, así sus eventos siguientes (incluso en otras
 ventanas) quedan marcados de inmediato, como hace un sistema real al fichar a un
@@ -74,8 +83,9 @@ class Etapa6Fraude:
 
     def __init__(self, lista_negra=(), ventana_seg=10, umbral_velocidad=8,
                  n_esperado_lista=100_000, prob_fp=0.01,
-                 epsilon=0.001, delta=0.01, semilla=42):
+                 epsilon=0.001, delta=0.01, semilla=42, marcar_rafaga_completa=True):
         self.ventana_seg = max(1, ventana_seg)
+        self.marcar_rafaga_completa = marcar_rafaga_completa
         self.umbral_velocidad = umbral_velocidad
         self._cm_params = dict(epsilon=epsilon, delta=delta, semilla=semilla)
 
@@ -131,10 +141,18 @@ class Etapa6Fraude:
             motivos.append("velocidad")
         if ya_sospechoso and not por_velocidad:
             motivos.append("sospechoso_previo")
-        # Score simple en [0, 1]: la lista negra pesa más que la velocidad.
-        base = 0.6 if (en_lista or ya_sospechoso) else 0.0
-        score = min(1.0, base + 0.4 * min(1.0, velocidad_max / (2 * self.umbral_velocidad)))
+        # Score en [0, 1], >= 0,5 si y solo si el evento queda marcado.
+        base = 0.6 if (en_lista or ya_sospechoso) else (0.5 if por_velocidad else 0.0)
+        score = min(1.0, base + self._aporte_velocidad(velocidad_max))
         return (en_lista or por_velocidad or ya_sospechoso), round(score, 4), motivos
+
+    def _aporte_velocidad(self, velocidad):
+        """Hasta 0,4 según la velocidad; bajo el umbral nunca llega a 0,2."""
+        return 0.4 * min(1.0, velocidad / (2 * self.umbral_velocidad))
+
+    def _ventana_de(self, evento):
+        t = _tiempo(evento)
+        return t // self.ventana_seg if t is not None else self._ventana_actual
 
     def procesar(self, lote):
         """Anota cada evento con fraude_predicho/fraude_score/fraude_motivos.
@@ -142,9 +160,34 @@ class Etapa6Fraude:
         Devuelve la lista de eventos anotados (no muta la entrada) y acumula
         métricas, incluidas precisión y recall contra ``es_fraude`` si existe.
         """
-        salida = []
+        decisiones = []
+        disparos = {}          # identificador -> {ventana: velocidad} donde cruzó el umbral en este lote
         for evento in lote:
             predicho, score, motivos = self._revisar(evento)
+            decisiones.append([evento, predicho, score, motivos])
+            if "velocidad" in motivos:
+                ventana = self._ventana_actual
+                velocidad = max(self._velocidad.estimar(c) for c in claves_identidad(evento))
+                for c in claves_identidad(evento):
+                    previa = disparos.setdefault(c, {}).get(ventana, 0)
+                    disparos[c][ventana] = max(previa, velocidad)
+
+        if self.marcar_rafaga_completa and disparos:
+            # Segunda pasada: los eventos de la ráfaga anteriores al disparo, misma ventana
+            for d in decisiones:
+                if d[1]:
+                    continue
+                ventana = self._ventana_de(d[0])
+                velocidades = [disparos[c][ventana] for c in claves_identidad(d[0])
+                               if c in disparos and ventana in disparos[c]]
+                if velocidades:
+                    d[1] = True
+                    d[2] = round(min(1.0, 0.5 + self._aporte_velocidad(max(velocidades))), 4)
+                    d[3] = ["rafaga"]
+                    self.totales["marcados_por_rafaga"] += 1
+
+        salida = []
+        for evento, predicho, score, motivos in decisiones:
             salida.append(con_cambios(evento, {
                 "fraude_predicho": predicho,
                 "fraude_score": score,
@@ -174,6 +217,7 @@ class Etapa6Fraude:
         return {
             "recibidos": t["recibidos"],
             "marcados": t["marcados"],
+            "marcados_por_rafaga": t["marcados_por_rafaga"],
             "vp": t["vp"], "fp": t["fp"], "fn": t["fn"], "vn": t["vn"],
             "precision": t["vp"] / pred_pos if hay_etiqueta and pred_pos else None,
             "recall": t["vp"] / reales_pos if hay_etiqueta and reales_pos else None,
