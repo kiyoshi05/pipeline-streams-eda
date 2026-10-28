@@ -7,14 +7,24 @@ from src.etapa7_similitud.minhash_lsh import (
     MinHashLSH,
     conjuntos_usuarios_por_producto,
 )
+from src.etapa8_grafo.grafo_dominio import Etapa8Grafo
+from src.etapa8_grafo.ranking import mayores_k
 from src.etapa9_servicio.topk import top_k
 from src.etapa9_servicio.trie import Trie
 
 
 class ServicioRecomendaciones:
-    """Integra recomendaciones, similitud por compras, autocompletado y métricas."""
+    """Integra recomendaciones, similitud por compras y resultados de etapa 8."""
 
-    def __init__(self, eventos, n_clusters=16, nprobe=4):
+    def __init__(
+        self,
+        eventos,
+        n_clusters=16,
+        nprobe=4,
+        pagerank=None,
+        comunidades=None,
+        alertas=None,
+    ):
         self.eventos = list(eventos)
 
         self.vectores, _ = construir_vectores_productos(self.eventos)
@@ -41,6 +51,27 @@ class ServicioRecomendaciones:
                 if valor:
                     self.trie.insertar(str(valor))
 
+        # Si no llegan resultados de la etapa 8, los calculamos desde los eventos.
+        self.etapa8 = None
+        if pagerank is None or comunidades is None:
+            self.etapa8 = Etapa8Grafo()
+            self.etapa8.procesar(self.eventos)
+
+        self.pagerank = (
+            dict(pagerank)
+            if pagerank is not None
+            else self.etapa8.puntajes(metodo="pagerank")
+        )
+        self.comunidades = (
+            dict(comunidades)
+            if comunidades is not None
+            else self.etapa8.comunidades(metodo="louvain")
+        )
+
+        # La etapa 6 aún no está integrada en main. Este argumento permite
+        # recibir sus alertas cuando estén disponibles.
+        self.alertas = list(alertas) if alertas is not None else []
+
     def recomendar(self, product_id, k=5):
         """Recomienda productos por similitud de atributos usando IVF."""
         if product_id not in self.vector_por_id:
@@ -62,11 +93,19 @@ class ServicioRecomendaciones:
         return top_k(puntuaciones, k)
 
     def similares_por_compra(self, product_id, k=5):
-        """Busca productos comprados por conjuntos de usuarios similares."""
+        """Busca productos cuyos compradores también compraron este producto."""
         if product_id not in self.conjuntos_compra:
             return []
 
         return self.indice_lsh.similares(product_id, k)
+
+    def productos_influyentes(self, k=10):
+        """Devuelve los productos con mayor PageRank."""
+        return mayores_k(self.pagerank, k)
+
+    def comunidad_de(self, product_id):
+        """Devuelve el identificador de comunidad del producto, si existe."""
+        return self.comunidades.get(product_id)
 
     def autocompletar(self, prefijo, k=10):
         """Sugiere marcas o categorías que empiezan con el prefijo."""
