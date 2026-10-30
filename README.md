@@ -7,13 +7,31 @@ recomendando productos, detectando fraude y respondiendo consultas, usando en
 cada etapa la estructura de datos adecuada implementada **a mano** y comparada
 contra su equivalente de la librería estándar o un método exacto.
 
-## Roles del equipo
+## Entregables
 
-| Integrante | Rol | Etapas | Cuenta |
-|---|---|---|---|
-| **Axel** | Ingesta y fraude | 0 (ingesta), 1 (preprocesamiento), 6 (fraude) | `Axel12fuentes` |
-| **Carlos Fukumoto** | Almacenamiento y grafo | 2 (prioridad), 3 (lookup), 4 (índice), 8 (grafo) | `kiyoshi05` |
-| **Sebastián Gallegos** | Similitud y servicio | 5 (multidimensional), 7 (similitud), 9 (servicio) | `sebastiangallegosmostajo` |
+| Entregable | Dónde |
+|---|---|
+| Informe final (15 páginas: portada, contenido y referencias) | [`Proyecto_Final_Grupo_1.pdf`](Proyecto_Final_Grupo_1.pdf) |
+| Código fuente, una carpeta por etapa | [`src/`](src/) |
+| Diagrama del pipeline | [`docs/diagrama_pipeline.html`](docs/diagrama_pipeline.html) |
+| Notebooks | [`notebooks/pipeline_completo.ipynb`](notebooks/pipeline_completo.ipynb) (las 10 etapas, con datos sintéticos o reales) y [`notebooks/ingesta_y_fraude.ipynb`](notebooks/ingesta_y_fraude.ipynb) |
+| Benchmarks: scripts, resultados y figuras | [`experimentos/`](experimentos/) |
+
+## Roles del equipo y contribución individual
+
+Cada integrante es responsable principal de sus etapas y aporta en la misma
+medida al código, a las mediciones, a la integración y a los entregables. El
+reparto coincide con los autores de los commits y de los pull requests del
+historial.
+
+| Integrante | Rol | Etapas (responsable principal) | Aporte concreto | Cuenta |
+|---|---|---|---|---|
+| **Axcel Fuentes** | Ingesta y fraude | 0 (ingesta), 1 (preprocesamiento), 6 (fraude) | Cola FIFO y buffer circular; validación, merge sort, deduplicación y búsqueda binaria; filtro de Bloom, Count-Min Sketch y detector de fraude. Generador sintético con fraude y muestra de 1K eventos. Benchmarks de las etapas 0, 1 y 6. Notebooks, diagrama del pipeline y sección del informe de sus etapas. | `Axel12fuentes` |
+| **Carlos Fukumoto** | Almacenamiento y grafo | 2 (prioridad), 3 (lookup), 4 (índice), 8 (grafo) | MinHeap y cola con prioridades; tabla hash con hashing de Fibonacci, caché LRU y matriz dispersa; B+Tree por tiempo y por precio; grafo de co-compra, PageRank, Louvain y Label Propagation. Orquestador del pipeline (`src/pipeline.py`, `run_pipeline.py`) y pruebas de punta a punta. Benchmarks de las etapas 2, 3, 4 y 8. Sección del informe de sus etapas. | `kiyoshi05` |
+| **Sebastián Gallegos** | Similitud y servicio | 5 (multidimensional), 7 (similitud), 9 (servicio) | KD-Tree y KNN exacto; IVF y MinHash + LSH; Top-K con heap, Trie y servicio de recomendaciones. Panel de Streamlit (`app.py`) con recomendaciones e influencia. Benchmarks de KD-Tree, Trie y MinHash. Sección del informe de sus etapas. | `sebastiangallegosmostajo` |
+
+Trabajo compartido por los tres: integración de las etapas por *pull request*
+revisado, informe final y presentación.
 
 ## El pipeline
 
@@ -59,6 +77,14 @@ un evento, consultas de productos y similitud frente al método exacto):
 python run_pipeline.py
 python run_pipeline.py --n 100000
 python run_pipeline.py --csv data/sample/eventos.csv
+python run_pipeline.py --csv data/raw/2019-Oct.csv --limite 100000 --cache 2000
+```
+
+**Notebook** con el pipeline completo (en la primera celda se elige
+`FUENTE = "sintetico"` o `"real"`):
+
+```bash
+jupyter notebook notebooks/pipeline_completo.ipynb
 ```
 
 **Pruebas** (toda la suite):
@@ -97,8 +123,11 @@ No se sube el dataset completo. Los generadores sintéticos con semilla están e
 
 `data/sample/eventos.csv` es una **muestra sintética de 1 000 eventos** con las
 columnas de REES46, para que la app y las pruebas corran sin descargar nada.
-Se regenera con `experimentos.stream_completo.escribir_muestra`. La muestra real
-de REES46 (archivo de octubre de 2019) está pendiente.
+Se regenera con `experimentos.stream_completo.escribir_muestra`.
+
+**Datos reales.** El archivo de octubre de 2019 de REES46 (unos 5 GB) se descarga
+de Kaggle y se guarda en `data/raw/`, que git ignora. El pipeline se probó con
+100.000 eventos reales: 138 s en total, con 258 MB de memoria pico.
 
 ## Estructura del repositorio
 
@@ -107,9 +136,11 @@ src/            una carpeta por etapa (etapa0_ingesta ... etapa9_servicio) y pip
 run_pipeline.py el pipeline de punta a punta desde la terminal
 tests/          pruebas unitarias y de integración (unittest + pytest)
 experimentos/   benchmarks, generador de datos, figuras y resultados (CSV)
-docs/           documentación por etapa
-data/sample/    muestra de 1K eventos
-app.py          demo con Streamlit
+notebooks/      pipeline completo e ingesta y fraude
+docs/           documentación por etapa y diagrama del pipeline
+data/sample/    muestra de 1K eventos (data/raw/ para REES46, ignorada por git)
+app.py          panel con Streamlit
+Proyecto_Final_Grupo_1.pdf   informe final
 ```
 
 ## Forma de trabajo
